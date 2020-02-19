@@ -1,2 +1,6 @@
 *.lst
-output*.gdx
+*.gdx
+*.g0*
+output/
+
+
