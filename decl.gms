@@ -1,354 +1,398 @@
 $TITLE Wisconsin Renewable Energy Model -- WEREWOLF
 * areas to fix are denoated with an XXXX flag
+$SETENV GDXCOMPRESS 1
+$IFTHENI %system.filesys% == UNIX $SET sep "/"
+$ELSE $SET sep "\"
+$ENDIF
 
-* --agg flag controls the aggregation possiblities are [fips, miso]
-$IF NOT SETGLOBAL agg $SETGLOBAL agg 'miso'
 $IF NOT SETGLOBAL almostsure $SETGLOBAL almostsure 0
+$IF NOT SETGLOBAL wind_scn $SETGLOBAL wind_scn 10
+$IF NOT SETGLOBAL hydro_scn $SETGLOBAL hydro_scn 1
 
-$GDXIN 'werewolf_data.gdx'
+$ONEMPTY
 
-*-----------
-* LOAD SETS
-*-----------
-SET b 'loadblock segments';
-$LOAD b
 
-SET r 'values to describe different values of the parameter frac';
-$LOAD r
 
-SET n 'modeled annual time periods';
-$LOAD n
+*-------------------
+* LOAD Tranmission Network Data
+*-------------------
+SET i 'regions in the model';
+SET ij(i,i) 'arcs in the network';
 
-SET k 'all technolgy types in the model';
-$LOAD k
-
-SET uid 'unique id numbers from EPA NEEDS database';
-$LOAD uid
-
-SET a 'model agent type';
-$LOAD a
-
-SET prodn(a) 'model agent type that generates electricity';
-$LOAD prodn
-
-SET w 'unknown set'
-$LOAD w
-
-SET t 'season';
-$LOAD t
-
-* SET season 'season';
-* $LOAD season
-*
-* SET daytype 'type of day';
-* $LOAD daytype
-*
-* SET windtype 'wind scenario';
-* $LOAD windtype
-*
-*
-*
-* SET scn(season,daytype,windtype) 'list of scenarios (flat)';
-* $LOADDC scn
-
-
-SET cnty 'Wisconsin county names';
-$LOAD cnty
-
-SET gen(k) 'all electricty generation technolgy types in the model';
-$LOADDC gen
-
-SET hydro(k) 'hydro technologies';
-$LOADDC hydro
-
-SET renew(k) 'renewable technologies';
-$LOADDC renew
-
-SET fossil(k) 'fossil technologies';
-$LOAD fossil
-
-SET store(k) 'storage technologies';
-$LOADDC store
-
-SET regions 'all regions';
-$LOAD regions
-
-SET i(regions) 'all nodes in model';
-
-SET fips(regions) 'All FIPS codes';
-$IF %agg% == 'fips' $LOAD i=fips
-$LOAD fips
-
-SET miso(regions) 'MISO regions';
-$IF %agg% == 'miso' $LOAD i=miso
-$LOAD miso
-
-SET plnt 'Plant names';
-$LOAD plnt
-
-SET ij(i,i) 'transmission arcs used in model';
-SET ij_miso(miso,miso) 'transmission arcs (miso level aggregation)';
-$IF %agg% == 'miso' $LOADDC ij=ij_miso
-$LOADDC ij_miso
-
-SET ij_fips(fips,fips) 'transmission arcs (fips level aggregation)';
-$IF %agg% == 'fips' $LOADDC ij=ij_fips
-$LOADDC ij_fips
-
-* XXXX -- note that this mapping is an approximation for now and assumes 1:1
-SET map_fips_miso(fips,miso) 'map between FIPS5 codes and MISO regions';
-$LOADDC map_fips_miso
-
-SET map_fips_cnty(fips,cnty) 'map between FIPS5 codes and county names';
-$LOADDC map_fips_cnty
-
-SET map_uid_cnty(uid,cnty) 'map between unit generator ID and county names';
-$LOADDC map_uid_cnty
-
-SET map_uid_fips(uid,fips) 'map between unit generator ID and FIPS5 codes';
-$LOADDC map_uid_fips
-
-SET map_uid_miso(uid,miso) 'map between unit generator ID and MISO regions';
-$LOADDC map_uid_miso
-
-SET map_uid_plnt(uid,plnt) 'map between unit generator ID and plant names';
-$LOADDC map_uid_plnt
-
-SET map_uid_type(uid,k) 'map between unit generator ID and generation technolgy type';
-$LOADDC map_uid_type
-
-
-
-*-----------------
-* LOAD PARAMETERS
-*-----------------
-PARAMETER population(*) 'county level population (units: count)';
-$LOADDC population
-
-PARAMETER geothermalloadfactor 'geothermal load factor (unitless factor)';
-$LOAD geothermalloadfactor
-
-PARAMETER windloadfactor 'XXXX';
-$LOAD windloadfactor
-
-PARAMETER batteryEff 'battery efficiency (unitless factor)';
-$LOAD batteryEff
-
-PARAMETER fractionLR 'maximum possible load reduction (unitless factor)';
-$LOAD fractionLR
-
-PARAMETER maxCarbon 'current CO2 emissions (units: tonnes)';
-$LOAD maxCarbon
-
-PARAMETER maxnrEnergy 'maximum non-renewable energy allowed (units: unknown)';
-$LOAD maxnrEnergy
-
-PARAMETER maxNR 'current thermal generation capacity (units: MW)';
-$LOAD maxNR
-
-PARAMETER capR 'XXXX';
-$LOAD capR
-
-PARAMETER mufactor 'XXXX';
-$LOAD mufactor
-
-PARAMETER nufactor 'XXXX';
-$LOAD nufactor
-
-PARAMETER chargerate(k) 'battery charge rate (units: MW)';
-$LOADDC chargerate
-
-PARAMETER CVARalpha 'CVaR parameter (unitless factor)';
-$LOAD CVARalpha
-
-PARAMETER lambda 'risk parameter lambda (unitless factor)';
-$LOAD lambda
-
-* PARAMETER fcap(fips,fips) 'Transmission line capacity (units: MW)';
-* $LOADDC fcap
-
-PARAMETER v 'value of lost load (units: $)';
-$LOAD v
-
-PARAMETER TonnesCO2(k) 'emissions for generator types (units: tonnes/MWh)';
-$LOADDC TonnesCO2
-
-PARAMETER cap(uid) 'generation nameplate capacity (units: MW)';
-$LOADDC cap
-
-PARAMETER loadblockhours(t,b) '# of hours per loadblock';
-$LOADDC loadblockhours
-
-PARAMETER eC(k) 'annualized capital costs (units: $/MW/year)';
-$LOADDC eC
-
-PARAMETER gC(k) 'SRMC [fuel + variable O&M costs] (units: $/MWh)';
-$LOADDC gC
-
-PARAMETER oC(k) 'operating costs (units: $/MW/yr)';
-$LOADDC oC
-
-PARAMETER load_miso(t,b,miso) 'electrical demand (units: MW)';
-$LOADDC load_miso
-
-PARAMETER alpha(t,b,i);
-PARAMETER alpha_miso(t,b,miso) 'capacity adjustment to shift RoR hydro into peak periods (units: unitless)';
-$IF %agg% == 'miso' $LOADDC alpha=alpha_miso
-
-PARAMETER alpha_fips(t,b,fips) 'capacity adjustment to shift RoR hydro into peak periods (units: unitless)';
-$IF %agg% == 'fips' $LOADDC alpha=alpha_fips
-
-PARAMETER windS0(t,b,i) 'wind factor S0 (units: unitless)';
-PARAMETER windS0_miso(t,b,miso) 'wind factor S0 (units: unitless)';
-$IF %agg% == 'miso' $LOADDC windS0=windS0_miso
-
-PARAMETER windS0_fips(t,b,fips) 'wind factor S0 (units: unitless)';
-$IF %agg% == 'fips' $LOADDC windS0=windS0_fips
-
-PARAMETER windS1(t,b,i) 'wind factor S1 (units: unitless)';
-PARAMETER windS1_miso(t,b,miso) 'wind factor S1 (units: unitless)';
-$IF %agg% == 'miso' $LOADDC windS1=windS1_miso
-
-PARAMETER windS1_fips(t,b,fips) 'wind factor S1 (units: unitless)';
-$IF %agg% == 'fips' $LOADDC windS1=windS1_fips
-
-PARAMETER Windprob(t) 'seasonal wind probability (units: unitless)';
-$LOADDC Windprob
-
-PARAMETER insolation(t,b,i) 'solar factor (units: unitless)';
-PARAMETER insolation_miso(t,b,miso) 'solar factor (units: unitless)';
-$IF %agg% == 'miso' $LOADDC insolation=insolation_miso
-
-PARAMETER insolation_fips(t,b,fips) 'solar factor (units: unitless)';
-$IF %agg% == 'fips' $LOADDC insolation=insolation_fips
-
-PARAMETER insol(fips) 'annual average ghi insolation (units: kWh/m^2/day)';
-$LOADDC insol
-
-PARAMETER inflowmu(n,t,i) 'run of river hydro generation scale factor (units: unitless)';
-PARAMETER inflows_miso(n,t,miso) 'run of river hydro generation scale factor (units: unitless)';
-$IF %agg% == 'miso' $LOADDC inflowmu=inflows_miso
-
-PARAMETER inflows_fips(n,t,fips) 'run of river hydro generation scale factor (units: unitless)';
-$IF %agg% == 'fips' $LOADDC inflowmu=inflows_fips
-
+$GDXIN '.%sep%gdx_temp%sep%network_arcs.gdx'
+$LOAD i<ij.dim1
+$LOADDC ij
 $GDXIN
 
-* Logic to control sets and parameters that are sensitive to %agg%
-ALIAS(miso,miso_p);
-ALIAS(fips,fips_p);
 ALIAS(i,j);
 
-
 PARAMETER fcap(i,i) 'Transmission line capacity (units: MW)';
-PARAMETER load(t,a,b,regions) 'electrical demand (units: MW)';
-
-* XXXX placeholder for tranmission line capacity
 fcap(ij(i,j)) = 1000000;
-
-* we need some supplemental data to untangle the WI only load data in the 'MIS_MNWI' region
-* we do this by simple weighting by population
-population('MN') = 5611179;
-population('WI') = sum(fips, population(fips));
-
-population('MIS_WUMS') = sum(map_fips_miso(fips,'MIS_WUMS'), population(fips));
-population('MIS_MNWI') = sum(map_fips_miso(fips,'MIS_MNWI'), population(fips));
-
-* necessary to scale miso data to remove effects of MN
-load_miso(t,b,'MIS_MNWI') = sum(map_fips_miso(fips,'MIS_MNWI'), population(fips)) / (population('MIS_MNWI') + population('MN')) * load_miso(t,b,'MIS_MNWI');
+*-------------------
 
 
-* implement county diassgretation if choosen
-PARAMETER wp(fips,miso) 'population weight factor';
-$IF %agg% == 'fips' wp(fips,miso) = (population(fips)/population(miso))$map_fips_miso(fips,miso);
-$IF %agg% == 'fips' load(t,'dem',b,fips) = sum(miso, wp(fips,miso) * load_miso(t,b,miso));
+*---------------------------
+* LOAD Load Duration Curves
+*---------------------------
+SET t 'season';
+SET b 'loadblock segments';
+SET hrs 'hours in a year';
+SET map_block_hour(i,b,hrs) 'map between regions, loadblocks and hours of the year';
 
-$IF %agg% == 'miso' load(t,'dem',b,miso) = load_miso(t,b,miso);
+PARAMETER ldc_compact(t,b,i) 'electrical demand (units: MW)';
+PARAMETER loadblockhours_compact(t,b) '# of hours per loadblock';
+
+$GDXIN '.%sep%gdx_temp%sep%ldc_fit.gdx'
+$LOAD t<ldc_compact.dim1
+$LOAD b<ldc_compact.dim2
+$LOADDC ldc_compact
+
+$LOAD hrs<map_block_hour.dim3
+$LOADDC map_block_hour
+$LOADDC loadblockhours_compact
+$GDXIN
+*-------------------
 
 
-PARAMETER max_data_emissions(t);
-max_data_emissions(t) = sum((b,i), loadblockhours(t,b) * load(t,'dem',b,i) * smax(k, TonnesCO2(k)));
+
+*-----------------
+* LOAD general model data
+*-----------------
+SET k 'all technolgy types in the model';
+SET uid 'unique id numbers from EPA NEEDS database';
+SET a 'model agent type';
+SET prodn(a) 'model agent type that generates electricity';
+SET gen(k) 'all electricty generation technolgy types in the model';
+SET hydro(k) 'hydro technologies';
+SET renew(k) 'renewable technologies';
+SET fossil(k) 'fossil technologies';
+SET geothermal(k) 'geothermal technologies';
+SET nuclear(k) 'nuclear technologies';
+SET store(k) 'storage technologies';
+SET battery(k) 'battery technologies';
+SET nrel_solar_PV(k) 'solar PV technologies from NREL';
+SET nrel_offwind(k) 'offshore wind technologies from NREL';
+SET nrel_onwind(k) 'onshore wind technologies from NREL';
+SET cost_bin 'cost bin';
+
+$GDXIN '.%sep%werewolf_data.gdx'
+$LOAD k, uid, a, prodn, fossil, cost_bin
+$LOADDC gen, hydro, renew, store, nuclear, battery, geothermal, nrel_solar_PV, nrel_onwind, nrel_offwind
+$GDXIN
+*-----------------
 
 
-* need to catalogue generator capacity into a single parameter
-PARAMETER cap_agg(regions,k) 'aggregated existing nameplate capacity at nodes (Units: MW)';
-PARAMETER capU(a,regions,k) 'existing nameplate capacity at nodes (Units: MW)';
 
-$IF %agg% == 'fips' cap_agg(fips,k) = sum(uid$(map_uid_fips(uid,fips) AND map_uid_type(uid,k)), cap(uid));
-$IF %agg% == 'miso' cap_agg(miso,k) = sum(uid$(map_uid_miso(uid,miso) AND map_uid_type(uid,k)), cap(uid));
+*-------------------
+* LOAD processed data (model specific subset from processed_werewolf_data.gdx)
+*-------------------
+SET not_cntlreg(i) 'all regions in model that are not subject to policy controls';
+SET cntlreg(i) 'all regions in model that are subject to policy controls';
+PARAMETER lat(i) 'latitude';
+PARAMETER lng(i) 'longitude';
+PARAMETER cap_agg(i,k) 'aggregated existing nameplate capacity at nodes (units: MW)';
+PARAMETER cap_nrel(k,i) 'technology potential for differnt renewables (units: MW)';
+PARAMETER hr_ave(i,k) 'average heat rate at nodes for each technology type (units: Btu/kWh)';
+PARAMETER nrel_solar_cost(k,i,cost_bin) 'solar costs (units: $/MW)';
+PARAMETER nrel_solar_cf(k,i,hrs) 'solar capacity factor (units: unitless)';
+PARAMETER nrel_wind_cost(k,i,cost_bin) 'wind costs (units: $/MW)';
+PARAMETER nrel_wind_cf(k,i,hrs) 'wind capacity factor (units: unitless)';
+
+$GDXIN '.%sep%gdx_temp%sep%processed_werewolf_data.gdx'
+$LOAD lat, lng, cap_agg, cap_nrel, hr_ave, not_cntlreg, cntlreg, nrel_solar_cf, nrel_solar_cost, nrel_wind_cf, nrel_wind_cost
+$GDXIN
+*-------------------
 
 
-capU('fos',i,k) = cap_agg(i,k)$fossil(k);
-capU('ren',i,k) = cap_agg(i,k)$renew(k);
-DISPLAY capU;
 
-* XXXX just an estimate right now... this would need refinement
-PARAMETER u(a,regions,k) 'additional capacity options at nodes in 2035 (MW)';
+*-------------------
+* Stochastic scenario index scheme
+*-------------------
+SET wn 'wind scenario index number' / w1*w%wind_scn% /;
+SET hn 'hydro scenario index number' / h1*h%hydro_scn% /;
+SET scn(t,wn,hn) 'scenario tuple' / #t.#wn.#hn /;
+*-------------------
 
-u('ren',i,k) = capU('ren',i,k) * 0.3;
-u('ren',i,k)$store(k) = 10;
+
+
+*-------------------
+* DEFINE model data
+*-------------------
+SET fuels 'all fuels that can be burned to produce electricity' / propane, butane, butane_propane_mix, home_heating_and_diesel_fuel, kerosene, coal, natural_gas, gasoline, residual_heating_fuel_businesses_only, jet_fuel, aviation_gas, flared_natural_gas, petroleum_coke, other_petroleum_miscellaneous, anthracite, bituminous, subbituminous, lignite, coke, geothermal, municipal_solid_waste, tire_derived_fuel, waste_oil, none /;
+
+* ref: https://www.eia.gov/environment/emissions/co2_vol_mass.php
+PARAMETER kgCO2(fuels) 'emissions for fuel types (units: kgCO2/MMBtu)' /
+    'propane' 63.07,
+    'butane' 64.95,
+    'butane_propane_mix' 64.01,
+    'home_heating_and_diesel_fuel' 73.16,
+    'kerosene' 72.30,
+    'coal' 95.35,
+    'natural_gas'	53.07,
+    'gasoline' 71.30,
+    'residual_heating_fuel_businesses_only' 78.79,
+    'jet_fuel' 70.90,
+    'aviation_gas' 69.20,
+    'flared_natural_gas' 54.70,
+    'petroleum_coke' 102.10,
+    'other_petroleum_miscellaneous'	72.62,
+    'anthracite' 103.70,
+    'bituminous' 93.30,
+    'subbituminous' 97.20,
+    'lignite' 97.70,
+    'coke' 114.12,
+    'geothermal' 7.71,
+    'municipal_solid_waste'	41.69,
+    'tire_derived_fuel' 85.97,
+    'waste_oil' 95.25
+    'none' 0/;
+
+SET map_gen_fuel(fuels,k) 'mapping between fuel types and generator types' /
+    'none'.(#renew,#nuclear),
+    'coal'.('Coal_Steam'),
+    'natural_gas'.('Combined_Cycle', 'Combustion_Turbine', 'IGCC')
+    'geothermal'. ('Geothermal'),
+    'other_petroleum_miscellaneous'.('OG_Steam','Fossil_Waste'),
+    'flared_natural_gas'.('Landfill_Gas'),
+    'municipal_solid_waste'.('Municipal_Solid_Waste', 'Non_Fossil_Waste')
+    'tire_derived_fuel'.('Tires') /;
+
+
+PARAMETER MMTonnesCO2(i,k) 'emissions factor for a generator (units: million metric tons of CO2 per MWh)';
+MMTonnesCO2(i,k) = sum(fuels$map_gen_fuel(fuels,k), hr_ave(i,k) * kgCO2(fuels) * (1/1e6) * 1000 * (1/1000) * (1/1e6));
+
+OPTION MMTonnesCO2:0:0:1;
+DISPLAY MMTonnesCO2;
+
+
+SCALAR maxCarbon 'current CO2 emissions (units: million metric tons of CO2)';
+SCALAR maxnrEnergy 'maximum non-renewable energy allowed (units: unknown)';
+SCALAR maxNR 'current thermal generation capacity in WI (units: MW)';
+
+* maxNR = sum(i$map_wi('WI',i), sum(k$fossil(k), cap_agg(i,k)));
+* maxnrEnergy = sum(i$map_wi('WI',i), sum(k$fossil(k), cap_agg(i,k) * 8760));
+* maxCarbon = sum(i$map_wi('WI',i), sum(k$fossil(k), cap_agg(i,k) ));
+
+maxNR = sum(i$cntlreg(i), sum(k$fossil(k), cap_agg(i,k)));
+maxnrEnergy = sum(i$cntlreg(i), sum(k$fossil(k), cap_agg(i,k) * 8760));
+maxCarbon = sum((i,k)$cntlreg(i), MMTonnesCO2(i,k) * cap_agg(i,k) * 8760);
+
+DISPLAY maxNR;
+DISPLAY maxnrEnergy;
+DISPLAY maxCarbon;
+
+
+*--------------------
+* Solar model data
+*--------------------
+* find the average capacity factor for solar systems
+PARAMETER ave_solar_cf(t,i,k,b);
+ave_solar_cf(t,i,k,b) = sum(hrs$(map_block_hour(i,b,hrs)), nrel_solar_cf(k,i,hrs)) / loadblockhours_compact(t,b);
+*--------------------
+
+
+
+*--------------------
+* Wind model data
+*--------------------
+* create N wind scenarios to use
+* wind capacify factor is randomly scaled by region (no correlation) for all hours in the top two loadblocks (b9,b8)
+
+PARAMETER scn_nrel_wind_cf(t,wn,k,i,hrs);
+loop(wn,
+
+    scn_nrel_wind_cf(t,wn,k,i,hrs) = nrel_wind_cf(k,i,hrs);
+
+    scn_nrel_wind_cf(t,wn,k,i,hrs)$(map_block_hour(i,'b9',hrs)) = uniform(0,1) * nrel_wind_cf(k,i,hrs);
+
+    scn_nrel_wind_cf(t,wn,k,i,hrs)$(map_block_hour(i,'b8',hrs)) = uniform(0,1) * nrel_wind_cf(k,i,hrs);
+
+    scn_nrel_wind_cf(t,wn,k,i,hrs)$(map_block_hour(i,'b7',hrs)) = uniform(0,1) * nrel_wind_cf(k,i,hrs);
+
+    );
+
+* make 'w1' scenario contain zero wind in first two loadblocks (extreme event)
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b9',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b8',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b7',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b6',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b5',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b4',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b3',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b2',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b1',hrs)) = 0;
+scn_nrel_wind_cf(t,'w1',k,i,hrs)$(map_block_hour(i,'b0',hrs)) = 0;
+
+
+
+* take this new scenario data and average the capacity factors by loadblock
+PARAMETER ave_wind_cf(t,wn,i,k,b);
+ave_wind_cf(t,wn,i,k,b) = sum(hrs$(map_block_hour(i,b,hrs)), scn_nrel_wind_cf(t,wn,k,i,hrs)) / loadblockhours_compact(t,b);
+*--------------------
+
+
+*--------------------
+* Hydro model data
+*--------------------
+* create N hydro scenarios to use
+* wind capacify factor is randomly scaled by region (no correlation) for all hours in the top two loadblocks (b9,b8)
+
+PARAMETER scn_hydro_cf(t,hn,k,i,hrs);
+
+loop(hn,
+
+    scn_hydro_cf(t,hn,hydro,i,hrs) = uniform(0.4,0.6);
+    scn_hydro_cf(t,hn,hydro,i,hrs)$(map_block_hour(i,'b9',hrs)) = uniform(0.4,0.6);
+    scn_hydro_cf(t,hn,hydro,i,hrs)$(map_block_hour(i,'b8',hrs)) = uniform(0.4,0.6);
+
+    );
+
+* make 'h1' scenario contain zero hydro in first two loadblocks (extreme event)
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b9',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b8',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b7',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b6',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b5',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b4',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b3',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b2',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b1',hrs)) = 0;
+scn_hydro_cf(t,'h1',hydro,i,hrs)$(map_block_hour(i,'b0',hrs)) = 0;
+
+
+
+
+* take this new scenario data and average the capacity factors by loadblock
+PARAMETER ave_hydro_cf(t,hn,i,k,b);
+ave_hydro_cf(t,hn,i,k,b) = sum(hrs$(map_block_hour(i,b,hrs)), scn_hydro_cf(t,hn,k,i,hrs)) / loadblockhours_compact(t,b);
+*--------------------
+
+
+*--------------------
+* Battery model data
+*--------------------
+PARAMETER chargerate(k) 'battery charge rate (units: MW)' /
+    'battery_fast' 2.7660
+    'battery_med' 0.8846
+    'battery_slow' 0.1617 /;
+*--------------------
+
+
+
+*--------------------
+* Generator capacity control parameters
+*--------------------
+PARAMETER capU(a,i,k) 'agent-based nameplate capacity at nodes (units: MW)';
+capU('fossil_gen_agent',i,k) = cap_agg(i,k)$(fossil(k) OR nuclear(k) OR geothermal(k));
+capU('renew_gen_agent',i,k) = cap_agg(i,k)$renew(k);
+
+
+* u(a,i,k) limits investments into certain categories
+PARAMETER u(a,i,k) 'agent-based ADDITIONAL capacity options at nodes in 2035 (MW)';
+
+* restrict investment to model regions in WI
+u('fossil_gen_agent',not_cntlreg,k) = 0;
+u('renew_gen_agent',not_cntlreg,k) = 0;
+
+
+* additional fossil generation
+u('fossil_gen_agent',cntlreg,'Coal_Steam') = 0;
+u('fossil_gen_agent',cntlreg,'Combined_Cycle') = u('fossil_gen_agent',cntlreg,'Combined_Cycle') * 0.2;
+u('fossil_gen_agent',cntlreg,'Combustion_Turbine') = u('fossil_gen_agent',cntlreg,'Combustion_Turbine') * 0.2;
+u('fossil_gen_agent',cntlreg,'Fossil_Waste') = 0;
+u('fossil_gen_agent',cntlreg,'IGCC') = u('fossil_gen_agent',cntlreg,'IGCC') * 0.2;
+u('fossil_gen_agent',cntlreg,'Landfill_Gas') = 0;
+u('fossil_gen_agent',cntlreg,'Municipal_Solid_Waste') = 0;
+u('fossil_gen_agent',cntlreg,'Non_Fossil_Waste') = 0;
+u('fossil_gen_agent',cntlreg,'OG_Steam') = 0;
+u('fossil_gen_agent',cntlreg,'Tires') = 0;
+
+* additional nuclear generation
+u('fossil_gen_agent',cntlreg,nuclear) = 0;
+
+* additional geothermal generation
+u('fossil_gen_agent',cntlreg,geothermal) = 0;
+
+* additional storage generation
+* u('renew_gen_agent',cntlreg,battery) = 0;
+u('renew_gen_agent',cntlreg,'Battery_fast') = 0;
+u('renew_gen_agent',cntlreg,'Battery_med') = 10;
+u('renew_gen_agent',cntlreg,'Battery_slow') = 10;
+
+* generalized growth of all renewables
+u('renew_gen_agent',cntlreg,k) = capU('renew_gen_agent',cntlreg,k) * 0.1;
+
+* No addl capacity... forces investment into NREL technology types (solar PV, on/offshore wind)
+u('renew_gen_agent',cntlreg,'Solar_PV') = 0;
+u('renew_gen_agent',cntlreg,'Onshore_Wind') = 0;
+u('renew_gen_agent',cntlreg,'Offshore_Wind') = 0;
+
+* Add in total technology potential for NREL technology types
+u('renew_gen_agent',cntlreg,nrel_solar_PV) = cap_nrel(nrel_solar_PV,cntlreg);
+u('renew_gen_agent',cntlreg,nrel_onwind) = cap_nrel(nrel_onwind,cntlreg);
+u('renew_gen_agent',cntlreg,nrel_offwind) = cap_nrel(nrel_offwind,cntlreg);
+
+OPTION u:0:0:1;
 DISPLAY u;
+
+FILE uu /'.%sep%output%sep%potentialcapacity_aggr.csv'/;
+PUT uu;
+uu.PW = 32767;
+PUT 'Agent,Region,GenType,Potential Capacity (MW)' /;
+loop((a,i,k), PUT a.tl:0 ',' i.tl:0 ',' k.tl:0 ',' u(a,i,k) /; );
+*--------------------
+
 
 SET used(a);
 used(a) = yes;
 
 * Derived parameters
-PARAMETER storagegatewidth;
-storagegatewidth = 500.0;
+* PARAMETER storagegatewidth;
+* storagegatewidth = 500;
 
-PARAMETER eff(k) ;
-eff(store) = batteryEff;
+PARAMETER eff(k) 'battery efficiency parameter';
+eff(battery) = 0.80;
 
-PARAMETER coeff(k);
+PARAMETER coeff(k) 'nonlinear coefficient for gcost marginal cost curve macro';
 coeff(k) = 0.001;
 
-PARAMETER prob(n);
-prob(n) = 1 / card(n);
 
-PARAMETER wprob(w,t);
-wprob('0',t) = Windprob(t);
-wprob('1',t) = 1.0 - Windprob(t);
-
-PARAMETER loadblockdays(t,*);
-loadblockdays(t,i) = sum(b, loadblockhours(t,b)) / 24;
+PARAMETER loadblockdays_compact(t,i);
+loadblockdays_compact(t,i) = sum(b, loadblockhours_compact(t,b)) / 24;
 
 
-PARAMETER mu(regions,k,n,b) 'limit on capacity of wind or inflow event';
-mu(i,k,n,b) = 1.0;
-mu(i,'Onshore_Wind',n,b) = windloadfactor;
+*--------------------
+* Capacity factor container
+*--------------------
+PARAMETER tmu(t,wn,hn,i,k,b) 'capacity factor data container (units: unitless)';
 
-PARAMETER tmu(t,*,k,n,w,b) 'unknown parameter (units: XXXX)';
-tmu(t,i,k,n,w,b) = mu(i,k,n,b);
+* follow Philpott -- most technologies have a CF = 1 unless wind/solar/hydro
+tmu(scn(t,wn,hn),i,k,b) = 1;
+tmu(scn(t,wn,hn),i,geothermal,b) = 0.85;
 
-tmu(t,i,'Hydro',n,w,b) =  alpha(t,b,i) * inflowmu(n,t,i);
-tmu(t,i,'Solar_PV',n,w,b) = insolation(t,b,i);
+* Add hydro intermittency
+tmu(scn(t,wn,hn),i,hydro,b) = ave_hydro_cf(t,hn,i,hydro,b);
 
 * Add wind intermittency
-tmu(t,i,'Onshore_Wind',n,'0',b) = windS0(t,b,i);
-tmu(t,i,'Onshore_Wind',n,'1',b) = windS0(t,b,i);
+* need to assume a CF for generic 'On/Offshore_Wind' technologies
+tmu(scn(t,wn,hn),i,'Onshore_Wind',b) = ave_wind_cf(t,wn,i,'Onshore_Wind_2',b);
+tmu(scn(t,wn,hn),i,'Offshore_Wind',b) = ave_wind_cf(t,wn,i,'Offshore_Wind_2',b);
+tmu(scn(t,wn,hn),i,nrel_onwind,b) = ave_wind_cf(t,wn,i,nrel_onwind,b);
+tmu(scn(t,wn,hn),i,nrel_offwind,b) = ave_wind_cf(t,wn,i,nrel_offwind,b);
 
-* parameter only used if there is hydro storage, removed for now
-* PARAMETER nu(*,k,n) 'limit on energy of drought event';
-* nu(i,k,n) = 1.0;
+* Add solar capacity factors
+* need to assume a CF for generic 'Solar_PV' technologies
+tmu(scn(t,wn,hn),i,'Solar_PV',b) = ave_solar_cf(t,i,'SolarUtil_PV_2',b);
+tmu(scn(t,wn,hn),i,nrel_solar_PV,b) = ave_solar_cf(t,i,nrel_solar_PV,b);
 
+* scenario weightings
+PARAMETER wprob(t,wn,hn);
+wprob(t,wn,hn)$scn(t,wn,hn) = 1 / card(scn);
 
-* parameter only used if there is hydro storage, removed for now
-* PARAMETER tnu(t,i,k,n);
-* tnu(t,i,k,n) = nu(i,k,n);
-* *tnu(t,i,'HYDROs',n)= nu(i,'HYDROs',n)*inflowscale(t);
-* tnu(t,'SI','HYDROs',n) = inflownuSI(n,t);
-* tnu(t,'NI','HYDROs',n) = inflownuNI(n,t);
+PARAMETER loadblockhours(t,wn,hn,b) '# of hours per loadblock';
+PARAMETER ldc(t,wn,hn,a,b,i) 'agent-based electrical demand (units: MW)';
+* PARAMETER loadblockdays(t,wn,hn,i);
 
-
-SET ctype / 'Invest', 'Maintain', 'Operate', 'LostLoad' /;
-PARAMETER build(r,a,i,k);
-PARAMETER ZZ(r,n,w,t);
-PARAMETER ZL(r,n,w,t);
-PARAMETER TotalCost(r);
-PARAMETER lostMWhours(r,a);
-PARAMETER capacity(r,a,i,k);
-PARAMETER ExpCost(r,ctype)
-PARAMETER TotalCostM(r);
-PARAMETER TotalCarbon(r);
-PARAMETER Co2price(r);
-PARAMETER lostloadenergy(a,*);
+loadblockhours(scn(t,wn,hn),b) = loadblockhours_compact(t,b);
+ldc(scn(t,wn,hn),'demand_agent',b,i) = ldc_compact(t,b,i);
+* loadblockdays(scn(t,wn,hn),i) = loadblockdays_compact(t,i);
