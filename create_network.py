@@ -7,54 +7,6 @@ from scipy.spatial import Delaunay
 from geopy.distance import geodesic
 
 
-def make_transmission_map(network, geoPts):
-    # create a base map
-    wi_center = [44.437778, -90.130186]  # lat, lng
-    my_map = folium.Map(location=wi_center, zoom_start=6)
-
-    borders = folium.FeatureGroup('Counties', show=False)
-    folium.GeoJson('../../data/raw_data/county_borders.json', name='Counties',
-                   style_function=lambda x: {'weight': 0.25}).add_to(borders)
-    my_map.add_child(borders)
-
-    borders = folium.FeatureGroup('Tribal Lands', show=False)
-    folium.GeoJson('../../data/raw_data/nrel-bia_tribal_lands.json', name='Tribal Lands',
-                   style_function=lambda x: {'weight': 0.25}).add_to(borders)
-    my_map.add_child(borders)
-
-    borders = folium.FeatureGroup('NREL ReEDS Regions', show=False)
-    folium.GeoJson('../../data/raw_data/nrel-lpreg3.json', name='NREL ReEDS Regions',
-                   style_function=lambda x: {'weight': 0.25}).add_to(borders)
-    my_map.add_child(borders)
-
-    arcs = folium.FeatureGroup('Synthetic Transmission Network', control=True, show=False)
-    for i in network.index:
-        from_lat = network.loc[i, 'from_lat']
-        from_lng = network.loc[i, 'from_lng']
-
-        to_lat = network.loc[i, 'to_lat']
-        to_lng = network.loc[i, 'to_lng']
-
-        line = folium.PolyLine([(from_lat, from_lng), (to_lat, to_lng)],
-                               weight=0.75, color='black')
-        arcs.add_child(line)
-
-    nodes = folium.FeatureGroup('Node Labels', control=True, show=False)
-    for i in geoPts.keys():
-        circ = folium.Circle([geoPts[i][0], geoPts[i][1]],
-                             popup=i,
-                             radius=500,
-                             color='orange',
-                             fill=True,
-                             fill_color='orange')
-        nodes.add_child(circ)
-
-    my_map.add_child(arcs)
-    my_map.add_child(nodes)
-    folium.LayerControl().add_to(my_map)
-    my_map.save('./output/transmission_network.html')
-
-
 def create_circle_with_radius(lat, lng, radiusMiles):
     lat_ring = []
     lng_ring = []
@@ -153,8 +105,6 @@ if __name__ == '__main__':
     # triangulate WI FIPS regions as the core of the network
 
     ij_regions, grid = create_transmission_network(geoPts=agg_pts)
-
-    make_transmission_map(network=grid, geoPts=agg_pts)  # map output
 
     # create gdx container
     gdxout = gt.gdxrw.gdxWriter('./gdx_temp/network_arcs.gdx')

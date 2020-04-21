@@ -2,5 +2,6 @@
 *.gdx
 *.g0*
 output/
+__pycache__/
 
 
