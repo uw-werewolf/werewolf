@@ -9,7 +9,8 @@ SCALAR myerrorlevel;
 
 $IF NOT SETGLOBAL ev_factor $SETGLOBAL ev_factor 0
 
-
+$IF NOT SET reldir $SETGLOBAL reldir '.'
+$IF NOT DEXIST '%reldir%%sep%gdx_temp' $CALL mkdir '%reldir%%sep%gdx_temp'
 
 *--------------------
 * Set up regions to be in the model

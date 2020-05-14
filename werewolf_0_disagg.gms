@@ -11,9 +11,6 @@ $ONEMPTY
 
 $IF NOT SETGLOBAL proj_year $SETGLOBAL proj_year 2030
 
-$IF NOT SET reldir $SETGLOBAL reldir '.'
-$IF NOT DEXIST '%reldir%%sep%gdx_temp' $CALL mkdir '%reldir%%sep%gdx_temp'
-
 * controls the growth of demand
 * EIA AEO 2020 says that demand will grow at approximately 0.8% year by year
 * https://www.eia.gov/outlooks/aeo/data/browser/#/?id=8-AEO2020&cases=ref2020&sourcekey=0
