@@ -11,7 +11,6 @@ $IF NOT SET folder $SETGLOBAL folder 'results'
 SET results_folder '%reldir%%sep%output%sep%%folder%%sep%' / 1 /;
 
 $IF NOT DEXIST '%reldir%%sep%output' $CALL mkdir '%reldir%%sep%output'
-
 $IF DEXIST '%reldir%%sep%output%sep%%folder%' ABORT 'results directory already exists, rename or remove existing'
 
 
