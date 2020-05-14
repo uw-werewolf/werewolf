@@ -3,69 +3,79 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.axis as axes
 import seaborn as sns
-import gdxtools as gt
+import os
+import gmsxfr
+import filesys as fs
+import style_parameters as sp
 
 pd.plotting.register_matplotlib_converters()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     #
     #
     # get model results
-    gdxin = gt.gdxrw.gdxReader('./final_results.gdx')
-    cntlreg = gdxin.rgdx(name='cntlreg')
-    not_cntlreg = gdxin.rgdx(name='not_cntlreg')
-    totalcarbon = gdxin.rgdx(name='TotalCarbon_ir')
-    frac_r = gdxin.rgdx(name='frac_r')
-    r = gdxin.rgdx(name='r')
+    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
 
-    results_path = gdxin.rgdx(name='results_folder')
-    results_path = results_path['text']
+    # load data from GDX
+    gdx.rgdx()
 
-    x_title = gdxin.rgdx(name='x_title')
-    x_title = x_title['text']
+    carbon = {
+        i: gdx.to_dict("frac_r")["elements"][i]
+        if gdx.to_dict("frac_r")["elements"][i] > np.finfo(float).tiny
+        else 0
+        for i in gdx.to_dict("frac_r")["elements"]
+    }
 
-    carbon = {i: frac_r['values'][i] if frac_r['values'][i] >
-              np.finfo(float).tiny else 0 for i in frac_r['values']}
+    emis = gdx.to_dataframe("TotalCarbon_ir")["elements"].copy()
+    emis.loc[emis[emis["L"] <= np.finfo(float).tiny].index, "L"] = 0
+    emis["r"] = emis["r"].map(carbon)
+    emis["r"] = emis["r"] * 100  # convert to %
 
-    emis = pd.DataFrame(data=totalcarbon['values'].keys(), columns=totalcarbon['domain'])
-    emis['value'] = totalcarbon['values'].values()
-    emis.loc[emis[emis['value'] < np.finfo(float).tiny].index, 'value'] = 0
-    emis['r'] = emis['r'].map(carbon)
-    emis['r'] = emis['r'] * 100  # convert to %
-    emis['is_cntlreg'] = [i in cntlreg['elements'] for i in emis['i']]
+    emis["is_cntlreg"] = emis["i"].isin(gdx.to_dict("cntlreg")["elements"])
+
+    emis["i"] = emis["i"].map(sp.region_map)
+    if sum(emis["i"].isnull()) != 0:
+        raise Exception("incomplete region mapping from style_parameters")
 
     #
     #
     # plot aggregate emissions by region for policy scenario
-    emis_2 = emis.groupby(['is_cntlreg', 'r']).sum()
+    emis_2 = emis.groupby(["is_cntlreg", "r"]).sum()
     emis_2.reset_index(drop=False, inplace=True)
 
-    n_plt = list(set(emis_2.is_cntlreg))
-    labels = dict(zip(n_plt, ['Not Cntl Reg', 'Cntl Reg']))
+    n_plt = [True, False]
+    labels = dict(zip([False, True], ["Not Cntl Reg", "Cntl Reg"]))
 
-    colorPalette = sns.color_palette(palette='bright', n_colors=len(n_plt))
-    colorDict = dict(zip(n_plt, colorPalette))
+    plt.style.use(["seaborn-white", "werewolf_style.mplstyle"])
 
-    plt.style.use(['seaborn-white', 'werewolf_style.mplstyle'])
-
+    y_div = 25
     fig, ax = plt.subplots()
     for n, i in enumerate(n_plt):
         df = emis_2[emis_2.is_cntlreg == i]
 
-        ax.plot(df['r'], df['value'],
-                visible=True,
-                color=colorDict[i],
-                linewidth=1,
-                label=labels[i])
+        ax.plot(
+            df["r"],
+            df["L"],
+            visible=True,
+            color=sp.cm_cntlreg[i],
+            linewidth=1,
+            label=labels[i],
+        )
 
-        # plt.suptitle('super title here')
-        plt.xlabel(x_title)
-        plt.ylabel('Total Carbon Emissions (Million Metric Tons CO2)')
-        plt.ylim(0)
-        plt.tight_layout()
-        ax.grid(which='major', axis='both', linestyle='--')
-        ax.legend(loc='best', frameon=True)
+    # plt.suptitle('super title here')
+    plt.xlabel(gdx.symText["x_title"])
+    plt.ylabel("Total Carbon Emissions (Million Metric Tons CO2)")
+    plt.ylim(0, y_div * (max(emis_2["L"]) // y_div + 1))
+    plt.tight_layout()
+    ax.grid(which="major", axis="both", linestyle="--")
+    ax.legend(loc="best", frameon=True)
 
-    plt.savefig(results_path + '/summary_plots/agg_emissions.png', dpi=600, format='png')
+    plt.savefig(
+        os.path.join(
+            gdx.symText["results_folder"], "summary_plots", "agg_emissions.png"
+        ),
+        dpi=600,
+        format="png",
+    )

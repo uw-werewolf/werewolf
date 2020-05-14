@@ -648,7 +648,7 @@ display y_cntlreg;
 *-------------------
 * Include file that contains aggregate metrics
 *-------------------
-$INCLUDE output_report.gms
+$INCLUDE werewolf_4_reports.gms
 *-------------------
 
 

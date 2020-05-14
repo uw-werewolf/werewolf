@@ -3,5 +3,4 @@
 *.g0*
 output/
 __pycache__/
-
-
+data/

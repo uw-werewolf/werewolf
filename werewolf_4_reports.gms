@@ -84,45 +84,45 @@ EXECUTE_UNLOAD 'final_results.gdx', k, r, y_ikr, y_ir, y_r, TotalCarbon_r, Total
 
 
 
-FILE xxx /'.%sep%output%sep%x.csv'/;
-PUT xxx;
-xxx.PW = 32767;
-PUT 'BuiltCap,'
-loop(rr, PUT rr.tl:0 ',')
-PUT /;
-
-
-loop(k,
-  PUT k.tl:0 ','
-  loop(rr, PUT x_cntlreg(k,rr) ',')
-  PUT /;
-  );
-
-
-FILE yyy /'.%sep%output%sep%y.csv'/;
-PUT yyy;
-yyy.PW = 32767;
-PUT 'Generation,'
-loop(rr, PUT rr.tl:0 ',')
-PUT /;
-loop(k,
-  PUT k.tl:0 ','
-  loop(rr, PUT y_cntlreg(k,rr) ',')
-  PUT /;
-  );
-
-
-FILE zzz /'.%sep%output%sep%z.csv'/;
-PUT zzz;
-zzz.PW = 32767;
-PUT 'TotalCap,'
-loop(rr, PUT rr.tl:0 ',')
-PUT /;
-loop(k,
-  PUT k.tl:0 ','
-  loop(rr, PUT z_cntlreg(k,rr) ',')
-  PUT /;
-  );
+* FILE xxx /'.%sep%output%sep%x.csv'/;
+* PUT xxx;
+* xxx.PW = 32767;
+* PUT 'BuiltCap,'
+* loop(rr, PUT rr.tl:0 ',')
+* PUT /;
+*
+*
+* loop(k,
+*   PUT k.tl:0 ','
+*   loop(rr, PUT x_cntlreg(k,rr) ',')
+*   PUT /;
+*   );
+*
+*
+* FILE yyy /'.%sep%output%sep%y.csv'/;
+* PUT yyy;
+* yyy.PW = 32767;
+* PUT 'Generation,'
+* loop(rr, PUT rr.tl:0 ',')
+* PUT /;
+* loop(k,
+*   PUT k.tl:0 ','
+*   loop(rr, PUT y_cntlreg(k,rr) ',')
+*   PUT /;
+*   );
+*
+*
+* FILE zzz /'.%sep%output%sep%z.csv'/;
+* PUT zzz;
+* zzz.PW = 32767;
+* PUT 'TotalCap,'
+* loop(rr, PUT rr.tl:0 ',')
+* PUT /;
+* loop(k,
+*   PUT k.tl:0 ','
+*   loop(rr, PUT z_cntlreg(k,rr) ',')
+*   PUT /;
+*   );
 
 
 
@@ -133,8 +133,6 @@ EXECUTE 'python make_geojson.py > %system.nullfile%';
 myerrorlevel = errorlevel;
 ABORT$(myerrorlevel <> 0) "ERROR: make_geojson.py did not finish successfully...";
 *-------------------
-
-
 
 
 
