@@ -70,7 +70,7 @@ if __name__ == "__main__":
     plt.ylim(0, y_div * (max(emis_2["L"]) // y_div + 1))
     plt.tight_layout()
     ax.grid(which="major", axis="both", linestyle="--")
-    ax.legend(loc="best", frameon=True)
+    ax.legend(loc="upper right", frameon=True, prop={"size": 6})
 
     plt.savefig(
         os.path.join(

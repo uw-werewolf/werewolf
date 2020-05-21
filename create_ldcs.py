@@ -1,7 +1,5 @@
 import pandas as pd
 import numpy as np
-
-# import gdxtools as gt
 import matplotlib.pyplot as plt
 import matplotlib.axis as axes
 import seaborn as sns
@@ -48,6 +46,7 @@ def fit_ldc(ldc, to_csv=False):
                 "daytype",
                 "24hr",
                 "regions",
+                "*",
             ]
         )
         .sum()
@@ -73,7 +72,7 @@ def fit_ldc(ldc, to_csv=False):
 
     for n, i in enumerate(ldc.regions.unique()):
 
-        ldc_1 = ldc[(ldc["regions"] == i)].copy()
+        ldc_1 = ldc[ldc["regions"] == i].copy()
 
         ldc_1["loadblock"] = pd.qcut(
             ldc_1["L"],
@@ -86,7 +85,8 @@ def fit_ldc(ldc, to_csv=False):
             ldc_1.loc[idx, "fit"] = ldc_1.loc[idx, "L"].mean()
 
         # nicer subseason labeling
-        ldc_1["loadblock"] = ["b" + str(ldc_1.loc[i, "loadblock"]) for i in ldc_1.index]
+        ldc_1["loadblock"] = ldc_1["loadblock"].map(str)
+        ldc_1["loadblock"] = "b" + ldc_1["loadblock"]
 
         # put back into main dataframe
         ldc.loc[ldc_1.index, "loadblock"] = ldc_1.loadblock
@@ -96,11 +96,6 @@ def fit_ldc(ldc, to_csv=False):
 
 
 if __name__ == "__main__":
-
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument('--dir', default=fs.gdx_temp, type=str)
-    #
-    # args = parser.parse_args()
 
     gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "ldc.gdx"))
 
@@ -112,50 +107,59 @@ if __name__ == "__main__":
     hrs = gdx.to_dataframe("hrs")
 
     # create load duration curves
-    ldc_fit = fit_ldc(ldc=ldc["elements"], to_csv=False)
+    ldc_fit = {}
+    for i in set(ldc["elements"]["*"]):
+        ldc_fit[i] = ldc["elements"][ldc["elements"]["*"] == i].copy()
+        ldc_fit[i] = fit_ldc(ldc=ldc_fit[i], to_csv=False)
 
     #
     #
     # export data to gdx
+    season = ldc_fit["total"].season.unique().tolist()
+    daytype = ldc_fit["total"].daytype.unique().tolist()
 
-    # gdxout = gt.gdxrw.gdxWriter(args.dir+'ldc_fit.gdx')
-
-    season = ldc_fit.season.unique().tolist()
-    daytype = ldc_fit.daytype.unique().tolist()
-
-    b = ldc_fit.loadblock.unique().tolist()
+    b = ldc_fit["total"].loadblock.unique().tolist()
     b.sort()
 
     regions = regions["elements"]["*"].unique().tolist()
-    hrs = ldc_fit.hrs.unique().tolist()
+    hrs = ldc_fit["total"].hrs.unique().tolist()
 
-    map_block_hour = list(zip(ldc_fit["regions"], ldc_fit["loadblock"], ldc_fit["hrs"]))
+    map_block_hour = list(
+        zip(
+            ldc_fit["total"]["regions"],
+            ldc_fit["total"]["loadblock"],
+            ldc_fit["total"]["hrs"],
+        )
+    )
 
     loadblockhours = {}
-    for i in ldc_fit.season.unique():
-        for k in ldc_fit.loadblock.unique():
-            idx = ldc_fit[
-                (ldc_fit["regions"] == ldc_fit.regions.unique()[0])
-                & (ldc_fit["season"] == i)
-                & (ldc_fit["loadblock"] == k)
+    for i in season:
+        for k in b:
+            idx = ldc_fit["total"][
+                (ldc_fit["total"]["regions"] == ldc_fit["total"].regions.unique()[0])
+                & (ldc_fit["total"]["season"] == i)
+                & (ldc_fit["total"]["loadblock"] == k)
             ].index
             loadblockhours[(i, k)] = len(idx)
 
-    load_compact = pd.pivot_table(
-        ldc_fit[["season", "loadblock", "regions", "L"]],
-        index=["season", "loadblock", "regions"],
-        values="L",
-        aggfunc=np.mean,
-    )
-    load_compact.reset_index(drop=False, inplace=True)
-    load_compact = dict(
-        zip(
-            load_compact[["season", "loadblock", "regions"]].itertuples(
-                index=False, name=None
-            ),
-            load_compact["L"],
+    load_compact = {}
+    for i in set(ldc["elements"]["*"]):
+        ldc_compact = ldc_fit[i].copy()
+        load_compact[i] = pd.pivot_table(
+            ldc_compact[["season", "loadblock", "regions", "L"]],
+            index=["season", "loadblock", "regions"],
+            values="L",
+            aggfunc=np.mean,
         )
-    )
+        load_compact[i].reset_index(drop=False, inplace=True)
+        load_compact[i] = dict(
+            zip(
+                load_compact[i][["season", "loadblock", "regions"]].itertuples(
+                    index=False, name=None
+                ),
+                load_compact[i]["L"],
+            )
+        )
 
     data = {
         "t": {"type": "set", "elements": season, "text": "season"},
@@ -179,7 +183,19 @@ if __name__ == "__main__":
         "ldc_compact": {
             "type": "parameter",
             "domain": ["t", "b", "regions"],
-            "elements": load_compact,
+            "elements": load_compact["total"],
+            "text": "electrical demand (units: MW)",
+        },
+        "ldc_compact_2020": {
+            "type": "parameter",
+            "domain": ["t", "b", "regions"],
+            "elements": load_compact["2020"],
+            "text": "electrical demand (units: MW)",
+        },
+        "ldc_compact_new_baseload": {
+            "type": "parameter",
+            "domain": ["t", "b", "regions"],
+            "elements": load_compact["new_baseload"],
             "text": "electrical demand (units: MW)",
         },
     }
@@ -197,19 +213,40 @@ if __name__ == "__main__":
         os.remove(f)
 
     # now plot
-
     plt.style.use(["seaborn-white", "werewolf_style.mplstyle"])
 
-    for i in ldc_fit.regions.unique():
+    for i in set(ldc_fit["total"]["regions"]):
         fig, ax = plt.subplots()
         df = pd.DataFrame()
-        df["raw"] = ldc_fit[ldc_fit["regions"] == i].L.values.tolist()
-        df["fit"] = ldc_fit[ldc_fit["regions"] == i].fit.values.tolist()
+        df["total"] = ldc_fit["total"][
+            ldc_fit["total"]["regions"] == i
+        ].L.values.tolist()
 
-        df.sort_values(by="raw", ascending=False, inplace=True)
+        df["2020"] = ldc_fit["2020"][ldc_fit["2020"]["regions"] == i].L.values.tolist()
 
-        ax.plot(df.raw.values, linewidth=1, color="blue", label="raw")
-        ax.plot(df.fit.values, linewidth=1, color="grey", label="fit")
+        df["new_baseload"] = ldc_fit["new_baseload"][
+            ldc_fit["new_baseload"]["regions"] == i
+        ].L.values.tolist()
+
+        df["fit"] = ldc_fit["total"][
+            ldc_fit["total"]["regions"] == i
+        ].fit.values.tolist()
+
+        total = df.total.values.tolist()
+        total.sort(reverse=True)
+        ax.plot(total, linewidth=1, color="red", label="EVs + New Baseload")
+
+        baseload_2020 = df["2020"].values.tolist()
+        baseload_2020.sort(reverse=True)
+        ax.plot(baseload_2020, linewidth=1, color="green", label="Orig Baseload")
+
+        new_baseload = df.new_baseload.values.tolist()
+        new_baseload.sort(reverse=True)
+        ax.plot(new_baseload, linewidth=1, color="blue", label="New Baseload")
+
+        fit = df.fit.values.tolist()
+        fit.sort(reverse=True)
+        ax.plot(fit, linewidth=1, color="grey", label="fit")
 
         plt.suptitle("Load Demand Curve")
         plt.title(f"Node = {i}")
@@ -222,7 +259,7 @@ if __name__ == "__main__":
 
         # plt.xlabel('Hour')
         plt.ylabel("Load (MW)")
-        ax.legend(loc="best", frameon=True)
+        ax.legend(loc="best", frameon=True, prop={"size": 6})
         ax.set_xticklabels([])
         plt.savefig(os.path.join(fs.ldc_curves_dir, f"{i}.png"), dpi=600, format="png")
         plt.close()

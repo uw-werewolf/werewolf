@@ -74,7 +74,7 @@ if __name__ == "__main__":
         plt.tight_layout()
         plt.ylim(0, y_div * (max(gen_2["L"]) // y_div + 1))
         ax.grid(which="major", axis="both", linestyle="--")
-        ax.legend(loc="best", frameon=True)
+        ax.legend(loc="upper right", frameon=True, prop={"size": 6})
 
     plt.savefig(
         os.path.join(
@@ -124,7 +124,7 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.ylim(0, y_div * (max(gen_2[gen_2["is_cntlreg"] == True]["L"]) // y_div + 1))
     ax.grid(which="major", axis="both", linestyle="--")
-    ax.legend(loc="best", frameon=True)
+    ax.legend(loc="upper right", frameon=True, prop={"size": 6})
     plt.savefig(
         os.path.join(
             gdx.symText["results_folder"], "summary_plots", "agg_generation_cntlreg.png"
@@ -132,3 +132,80 @@ if __name__ == "__main__":
         dpi=600,
         format="png",
     )
+
+    #
+    #
+    # plot disaggregated capacity factor for fossil and renew by policy scenario for all regions
+    gen["i"] = gen["i"].map(sp.region_map)
+    if sum(gen["i"].isnull()) != 0:
+        raise Exception("incomplete region mapping from style_parameters")
+
+    cap = gdx.to_dataframe("capacity")["elements"].copy()
+    cap.loc[cap[cap["L"] <= np.finfo(float).tiny].index, "L"] = 0
+    cap["r"] = cap["r"].map(carbon)
+    cap["r"] = cap["r"] * 100  # convert to %
+
+    cap["is_cntlreg"] = cap["i"].isin(gdx.to_dict("cntlreg")["elements"])
+    cap["is_fossil"] = cap["k"].isin(gdx.to_dict("fossil")["elements"])
+
+    cap["is_solar"] = cap["k"].isin(gdx.to_dict("all_solar")["elements"])
+    cap["is_wind"] = cap["k"].isin(gdx.to_dict("all_wind")["elements"])
+    cap["is_nuclear"] = cap["k"].isin(gdx.to_dict("nuclear")["elements"])
+    cap["is_hydro"] = cap["k"].isin(gdx.to_dict("hydro")["elements"])
+
+    cap["k"] = cap["k"].map(sp.gen_map)
+    if sum(cap["k"].isnull()) != 0:
+        raise Exception("incomplete generation mapping from style_parameters")
+
+    cap["i"] = cap["i"].map(sp.region_map)
+    if sum(cap["i"].isnull()) != 0:
+        raise Exception("incomplete region mapping from style_parameters")
+
+    cap_2 = cap.groupby(["k", "i", "r"]).sum()
+    cap_2.reset_index(drop=False, inplace=True)
+
+    gen_2 = gen.groupby(["k", "i", "r"]).sum()
+    gen_2.reset_index(drop=False, inplace=True)
+
+    gen_2.set_index(["k", "i", "r"], inplace=True)
+    gen_2["capacity"] = cap_2.set_index(["k", "i", "r"])["L"]
+    gen_2["cf"] = round(gen_2["L"] * 1000 / (gen_2["capacity"] * 8760), 4)
+    gen_2.fillna(0, inplace=True)
+    gen_2.reset_index(drop=False, inplace=True)
+
+    n_plt = list(set(zip(gen_2.k, gen_2.i)))
+    n_plt.sort()
+
+    plt.style.use(["seaborn-white", "werewolf_style.mplstyle"])
+
+    for region in set(gen_2["i"]):
+        fig, ax = plt.subplots()
+        df = gen_2[(gen_2.i == region) & (gen_2.L > 0)]
+
+        for tech in set(df.k):
+            df = gen_2[(gen_2.i == region) & (gen_2.k == tech)]
+            ax.plot(
+                df["r"],
+                df["cf"],
+                visible=True,
+                color=sp.cm_gen[tech],
+                linewidth=1,
+                label=tech,
+            )
+
+        # plt.suptitle('super title here')
+        plt.xlabel(gdx.symText["x_title"])
+        plt.ylabel("Capacity Factor (unitless)")
+        plt.tight_layout()
+        plt.ylim(0, 1.05)
+        ax.grid(which="major", axis="both", linestyle="--")
+        ax.legend(loc="upper right", frameon=True, prop={"size": 6})
+        plt.savefig(
+            os.path.join(
+                gdx.symText["results_folder"],
+                "summary_plots",
+                f"capacity_factor_region_{region}.png",
+            ),
+            dpi=600,
+            format="png",
+        )

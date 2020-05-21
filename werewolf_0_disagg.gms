@@ -174,12 +174,12 @@ $LOADDC nrel_wind_cost
 PARAMETER nrel_wind_cf(k,regions,hrs) 'wind capacity factor (units: unitless)';
 $LOADDC nrel_wind_cf
 
-PARAMETER ldc_raw(epoch,hrs,regions) 'raw load duration curves';
+PARAMETER ldc_raw(epoch,hrs,regions) 'load duration curves for 2020';
 $LOADDC ldc_raw
 
+PARAMETER ldc_raw_scaled(epoch,hrs,regions) 'scaled load duration curves';
 * scale demand to reflect future demand in year = %proj_year%
-ldc_raw(time(epoch,hrs),regions) = growth_factor * ldc_raw(epoch,hrs,regions);
-
+ldc_raw_scaled(time(epoch,hrs),regions) = growth_factor * ldc_raw(epoch,hrs,regions);
 
 PARAMETER lat(regions) 'latitude';
 $LOADDC lat
@@ -239,6 +239,8 @@ n_fips(reeds_regions) = sum(fips$map_fips_reeds_regions(fips,reeds_regions), 1);
 * Diaggregate LDCs to FIPS level
 *--------------------
 ldc_raw(time(epoch,hrs),fips) = sum(ipm$map_fips_ipm(fips,ipm), wp(fips,ipm) * ldc_raw(epoch,hrs,ipm));
+
+ldc_raw_scaled(time(epoch,hrs),fips) = sum(ipm$map_fips_ipm(fips,ipm), wp(fips,ipm) * ldc_raw_scaled(epoch,hrs,ipm));
 *--------------------
 
 

@@ -93,7 +93,7 @@ if __name__ == "__main__":
             y_div * (max(exim["net"]) // y_div + 1),
         )
         ax.grid(which="major", axis="both", linestyle="--")
-        ax.legend(loc="best", frameon=True)
+        ax.legend(loc="upper right", frameon=True, prop={"size": 6})
 
     plt.savefig(
         os.path.join(gdx.symText["results_folder"], "summary_plots", "agg_exim.png"),

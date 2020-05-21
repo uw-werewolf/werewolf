@@ -25,6 +25,22 @@ SET map_aggr(regions,fips) 'aggregation scheme';
 
 
 
+*--------------------
+* Adoption of EVs Model
+*--------------------
+SCALAR pi / 3.14159 /;
+SCALAR eer / 3 /;
+PARAMETER transport_energy;
+
+* (average mpg) * (LDV in the US) * (1000 vmt/month) * (months/year) * (MJ/gal) * (1/engine efficiency) * (kWh/MJ) * (years/hour) * (MW/kW) = (average MW)
+transport_energy = (1/24.9) * %ev_factor% * (193672370) * (1000) * (12) * (126958036/1e6) * (1/3.6) * (1/8760) * (1/1000);
+
+PARAMETER total_population;
+total_population = sum(fips_p, population(fips_p));
+
+PARAMETER ev_load(epoch,hrs,regions);
+ev_load(time(epoch,hrs),fips) = (sin((pi/180)*((0.5*24)*hrs.val - 120)) + 1) * transport_energy/eer * population(fips) / total_population;
+
 
 *--------------------
 * Aggregation Scheme: WI is broken into 2 nodes
@@ -421,11 +437,28 @@ gC(nrel_offwind(k)) = 0;
 
 
 
+
+
 *--------------------
 * Load Duration Curve (LDC) data
 *--------------------
-PARAMETER ldc_container(epoch,hrs,regions) 'load duration curve';
-ldc_container(time(epoch,hrs),i) = sum(fips$map_aggr(i,fips), (1 + %ev_factor%) * ldc_raw(epoch,hrs,fips));
+PARAMETER load_description(*,regions);
+load_description("ev",i) = sum(time(epoch,hrs), sum(fips$map_aggr(i,fips), ev_load(epoch,hrs,fips))) / CARD(hrs);
+
+load_description("new_baseload",i) = sum(time(epoch,hrs), sum(fips$map_aggr(i,fips), ldc_raw_scaled(epoch,hrs,fips))) / CARD(hrs);
+
+load_description("2020",i) = sum(time(epoch,hrs), sum(fips$map_aggr(i,fips), ldc_raw_scaled(epoch,hrs,fips))) / CARD(hrs);
+
+
+PARAMETER ldc_container(epoch,hrs,regions,*) 'load duration curve';
+
+ldc_container(time(epoch,hrs),i,"2020") = sum(fips$map_aggr(i,fips), ldc_raw(epoch,hrs,fips));
+
+ldc_container(time(epoch,hrs),i,"new_baseload") = sum(fips$map_aggr(i,fips), ldc_raw_scaled(epoch,hrs,fips));
+
+ldc_container(time(epoch,hrs),i,"ev") = sum(fips$map_aggr(i,fips), ev_load(epoch,hrs,fips));
+
+ldc_container(time(epoch,hrs),i,"total") = sum(fips$map_aggr(i,fips), ldc_raw_scaled(epoch,hrs,fips) + ev_load(epoch,hrs,fips));
 *--------------------
 
 
@@ -473,12 +506,10 @@ ABORT$(myerrorlevel <> 0) "ERROR: create_network.py did not finish successfully.
 * OUTPUT: LDC plots
 *--------------------
 * this code creates all the load duration curves to be used in the model
-EXECUTE_UNLOAD '.%sep%gdx_temp%sep%ldc.gdx' ldc_container, regions, hrs;
+EXECUTE_UNLOAD '.%sep%gdx_temp%sep%ldc.gdx' ldc_container, regions, hrs, load_description;
 EXECUTE 'python create_ldcs.py > %system.nullfile%';
 myerrorlevel = errorlevel;
 ABORT$(myerrorlevel <> 0) "ERROR: create_ldcs.py did not finish successfully...";
-
-
 
 
 EXECUTE_UNLOAD '.%sep%gdx_temp%sep%processed_werewolf_data.gdx';

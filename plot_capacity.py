@@ -77,11 +77,13 @@ if __name__ == "__main__":
             linewidth=0.5,
         )
 
-        ax.legend(loc="lower left", frameon=True)
+        ax.legend(loc="upper right", frameon=True, prop={"size": 6})
         plt.xlabel(gdx.symText["x_title"])
         plt.title(f"Generation Capacity for Control Region -- {cr}")
         plt.ylabel("Generation Capacity (MW)")
-        plt.ylim(0, y_div * (max(cap_2["L"]) // y_div + 1))
+        plt.ylim(
+            0, y_div * (sum(cap_2[cap_2["r"] == max(cap_2["r"])]["L"]) // y_div + 1)
+        )
         plt.tight_layout()
         plt.savefig(
             os.path.join(
@@ -124,17 +126,19 @@ if __name__ == "__main__":
             linewidth=0.5,
         )
 
-        ax.legend(loc="lower left", frameon=True)
+        ax.legend(loc="upper right", frameon=True, prop={"size": 6})
         plt.xlabel(gdx.symText["x_title"])
         plt.title(f"Generation Capacity for Non-Control Region -- {cr}")
         plt.ylabel("Generation Capacity (MW)")
-        plt.ylim(0, y_div * (max(cap_2["L"]) // y_div + 1))
+        plt.ylim(
+            0, y_div * (sum(cap_2[cap_2["r"] == max(cap_2["r"])]["L"]) // y_div + 1)
+        )
         plt.tight_layout()
         plt.savefig(
             os.path.join(
                 gdx.symText["results_folder"],
                 "summary_plots",
-                f"agg_capacity_cntlreg_{cr}.png",
+                f"agg_capacity_not_cntlreg_{cr}.png",
             ),
             dpi=600,
             format="png",
@@ -169,11 +173,11 @@ if __name__ == "__main__":
         linewidth=0.5,
     )
 
-    ax.legend(loc="lower left", frameon=True)
+    ax.legend(loc="upper right", frameon=True, prop={"size": 6})
     plt.xlabel(gdx.symText["x_title"])
     plt.title(f"Aggregate Generation Capacity for All Non-Control Regions")
     plt.ylabel("Generation Capacity (MW)")
-    plt.ylim(0, y_div * (max(cap_2["L"]) // y_div + 1))
+    plt.ylim(0, y_div * (sum(cap_2[cap_2["r"] == max(cap_2["r"])]["L"]) // y_div + 1))
     plt.tight_layout()
     plt.savefig(
         os.path.join(

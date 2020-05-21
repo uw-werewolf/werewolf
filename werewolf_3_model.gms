@@ -408,7 +408,7 @@ MODEL capsysopt / sysobjdef,
 * Year 2020 Model Constraints
 *-------------------
 * scale back load duration curve to current day (2020)
-ldc(t,wn,sn,hn,a,b,i) = ldc(t,wn,sn,hn,a,b,i) / growth_factor;
+ldc(t,wn,sn,hn,a,b,i) = ldc_2020(t,wn,sn,hn,a,b,i);
 
 * limit the amount of load shed that is possible
 q.UP(scn(t,wn,sn,hn),a,i,b)$inb(t,wn,sn,hn,i,b) = fractionLR * ldc(t,wn,sn,hn,a,b,i);
@@ -450,24 +450,24 @@ x_cntlreg(k,'2020') = eps + sum((a,i)$cntlreg(i), x.L(a,i,k));
 y_cntlreg(k,'2020') = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum((a,i)$cntlreg(i), sum(b, y.L(t,wn,sn,hn,a,i,k,b) * loadblockhours_compact(t,b))));
 *-------------------
 
-parameter gen_test1(k);
-gen_test1(k) = sum((scn(t,wn,sn,hn),a,i,b)$(aik(a,i,k) AND cntlreg(i)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b));
-
-parameter test1(k);
-test1(k) = sum((a,i)$(aik(a,i,k) AND cntlreg(i)), z.L(a,i,k));
-
-option gen_test1:0:0:1;
-display gen_test1;
-
-option test1:0:0:5;
-display test1;
+* parameter gen_test1(k);
+* gen_test1(k) = sum((scn(t,wn,sn,hn),a,i,b)$(aik(a,i,k) AND cntlreg(i)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b));
+*
+* parameter test1(k);
+* test1(k) = sum((a,i)$(aik(a,i,k) AND cntlreg(i)), z.L(a,i,k));
+*
+* option gen_test1:0:0:1;
+* display gen_test1;
+*
+* option test1:0:0:5;
+* display test1;
 
 
 *-------------------
-* Year %proj_year% Model Constraints
+* Year %proj_year% (baseline) Model Constraints
 *-------------------
 * scale to %proj_year% with growth_factor
-ldc(t,wn,sn,hn,a,b,i) = ldc(t,wn,sn,hn,a,b,i) * growth_factor;
+ldc(t,wn,sn,hn,a,b,i) = ldc_total(t,wn,sn,hn,a,b,i);
 
 * limit the amount of load shed that is possible
 q.UP(scn(t,wn,sn,hn),a,i,b)$inb(t,wn,sn,hn,i,b) = fractionLR * ldc(t,wn,sn,hn,a,b,i);
@@ -494,19 +494,11 @@ z.LO(a,i,k)$aik(a,i,k) = 0;
 * SOLVE baseline scenario model
 frac = 0;
 * must hold baseline policy to that generated in 2020
-co2redn = 0;
-capredn = 1;
+co2redn = 1;
+capredn = 0;
 nrenergyredn = 0;
 carbonleakage = 1;
 SOLVE capsysopt USING lp min sysobj;
-
-* * calculate carbon emissions and non-renewable capacity
-* maxCarbon = sum((scn(t,wn,sn,hn),a,i,k,b)$(aik(a,i,k) AND carbemit(i,k) AND cntlreg(i)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b) * MMTonnesCO2(i,k));
-*
-* maxNR = sum((a,i,k)$(aik(a,i,k) AND cntlreg(i) AND (NOT renew(k))), z.L(a,i,k));
-*
-* DISPLAY maxCarbon;
-* DISPLAY maxNR;
 
 * calculate imports into cntlreg
 $IFTHEN.imports almostsure == 1
@@ -537,14 +529,19 @@ y_cntlreg(k,'2030') = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum((a,i)$c
 x.FX(a,not_cntlreg(i),k)$aik(a,i,k) = x.L(a,i,k);
 
 
-SET r 'scenario iteration' / 1*5 /;
+SET r 'scenario iteration' / 1*10 /;
 SET rr / 2020, 2030, #r /;
 PARAMETER frac_r(r) /
     '1' 0.00
-    '2' 0.20
-    '3' 0.40
-    '4' 0.60
-    '5' 0.80 /;
+    '2' 0.10
+    '3' 0.20
+    '4' 0.30
+    '5' 0.40
+    '6' 0.50
+    '7' 0.60
+    '8' 0.70
+    '9' 0.80
+    '10' 0.90/;
 frac_r(r) = eps + frac_r(r);
 
 
@@ -575,18 +572,13 @@ PARAMETER q_out(t,wn,sn,hn,i,b,r);
 
 * Loop over policy scenarios
 * SET x_title 'Demand Increase (%)' / 1 /;
-* SET x_title 'Carbon Reduction (% from baseline)' / 1 /;
-SET x_title 'Max Non-Renewable Capacity Reduction (% from baseline)' / 1 /;
+SET x_title 'Carbon Reduction (% from baseline)' / 1 /;
+* SET x_title 'Max Non-Renewable Capacity Reduction (% from baseline)' / 1 /;
 * SET x_title 'Carbon Reduction, w/Demand Shock (% from baseline)' / 1 /;
 
-* Demand shock
-* ldc(t,wn,sn,hn,a,b,cntlreg(i)) = 1.20 * ldc(t,wn,sn,hn,a,b,i);
 
 LOOP(r,
 frac = frac_r(r);
-co2redn = 0;
-capredn = 1;
-nrenergyredn = 0;
 carbonleakage = 0;
 
 SOLVE capsysopt USING lp min sysobj;
@@ -650,20 +642,3 @@ display y_cntlreg;
 *-------------------
 $INCLUDE werewolf_4_reports.gms
 *-------------------
-
-
-
-
-
-* FILE uuu /'.%sep%output%sep%addl_cap.csv'/;
-* PUT uuu;
-* uuu.PW = 32767;
-* PUT 'Agent,Region,GenType,Cur Cap (MW),Addl Cap (MW),Tot Cap (MW),Poten Cap (MW),Cost ($/MW/yr)' /;
-*
-* loop((aik(a,i,k)), PUT a.tl:0 ',' i.tl:0 ',' k.tl:0 ',' capU(a,i,k) ',' x.L(a,i,k) ',' z.L(a,i,k) ','  u(a,i,k) ',' eC(k,i)  /; );
-*
-*
-* EXECUTE 'gdxdump out.gdx symb=ave_y format=csv output=ave_y.csv'
-* EXECUTE 'gdxdump out.gdx symb=ave_f format=csv output=ave_f.csv'
-* EXECUTE 'gdxdump out.gdx symb=ave_y_cntlreg format=csv output=ave_y_cntlreg.csv'
-* EXECUTE 'gdxdump out.gdx symb=ave_y_not_cntlreg format=csv output=ave_y_not_cntlreg.csv'

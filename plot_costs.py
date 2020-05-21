@@ -81,7 +81,7 @@ if __name__ == "__main__":
             -y_div * (-min(syscosts["L"]) // y_div + 1),
             y_div * (max(syscosts["L"]) // y_div + 1),
         )
-        ax.legend(loc="best", frameon=True)
+        ax.legend(loc="upper right", frameon=True, prop={"size": 6})
         plt.tight_layout()
         ax.grid(which="major", axis="both", linestyle="--")
     plt.savefig(
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                 -y_div * (-min(df["L"]) // y_div + 1),
                 y_div * (max(df["L"]) // y_div + 1),
             )
-            ax.legend(loc="best", frameon=True)
+            ax.legend(loc="upper right", frameon=True, prop={"size": 6})
             plt.tight_layout()
             ax.grid(which="major", axis="both", linestyle="--")
         plt.savefig(

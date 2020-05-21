@@ -160,39 +160,95 @@ cost_map = {
 
 # generator type color map
 gen_labels = list(set(gen_map.values()))
-gen_labels.sort()
-# cm = plt.get_cmap('gist_ncar')
-cm = plt.get_cmap("jet")
-cm_gen = {i: cm(1.0 * n / len(gen_labels)) for n, i in enumerate(gen_labels)}
+# cm = plt.get_cmap("jet")
+# cm_gen = {i: cm(1.0 * n / len(gen_labels)) for n, i in enumerate(gen_labels)}
+
+cm_gen = {
+    "Non Fossil Waste": (0.0, 0.0, 0.5, 1.0),
+    "Combustion Turbine": (0.0, 0.0, 0.696078431372549, 1.0),
+    "Offshore Wind": (0.0, 0.0, 0.892156862745098, 1.0),
+    "Solar Thermal": (0.0, 0.0176470588235293, 1.0, 1.0),
+    "Fossil Waste": (0.0, 0.19019607843137254, 1.0, 1.0),
+    "Geothermal": (0.0, 0.3627450980392157, 1.0, 1.0),
+    "Battery - Slow": (0.0, 0.5352941176470586, 1.0, 1.0),
+    "Onshore Wind": (0.0, 0.707843137254902, 1.0, 1.0),
+    "Combined Cycle": (0.0, 0.8960784313725491, 0.9709044908285895, 1.0),
+    "Municipal Solid Waste": (0.13598987982289687, 1.0, 0.8317520556609741, 1.0),
+    "Nuclear": (0.2751423149905123, 1.0, 0.6925996204933587, 1.0),
+    "Battery - Fast": (0.4142947501581275, 1.0, 0.5534471853257434, 1.0),
+    "IGCC": (0.5534471853257431, 1.0, 0.4142947501581278, 1.0),
+    "Landfill Gas": (0.6925996204933585, 1.0, 0.27514231499051234, 1.0),
+    "Coal Steam": (0.831752055660974, 1.0, 0.1359898798228969, 1.0),
+    "Battery - Med": (0.9709044908285893, 0.9593318809005086, 0.0, 1.0),
+    "Solar PV": (1.0, 0.7850399419026872, 0.0, 1.0),
+    "Pumped Storage": (1.0, 0.6252723311546844, 0.0, 1.0),
+    "Hydro": (1.0, 0.46550472040668145, 0.0, 1.0),
+    "Tires": (1.0, 0.3057371096586785, 0.0, 1.0),
+    "Biomass": (1.0, 0.14596949891067557, 0.0, 1.0),
+    "Fuel Cell": (0.8921568627450983, 0.0, 0.0, 1.0),
+    "Oil/Gas Steam": (0.6960784313725497, 0.0, 0.0, 1.0),
+}
+
 
 # region color map
 region_labels = list(set(region_map.values()))
-region_labels.sort()
-colorPalette = sns.color_palette(palette="bright", n_colors=len(region_labels))
-cm_region = {i: cm(1.0 * n / len(region_labels)) for n, i in enumerate(region_labels)}
+# colorPalette = sns.color_palette(palette="bright", n_colors=len(region_labels))
+# cm_region = {i: cm(1.0 * n / len(region_labels)) for n, i in enumerate(region_labels)}
+
+cm_region = {
+    "IL - Other": (0.0, 0.0, 0.5, 1.0),
+    "IL": (0.0, 0.06470588235294118, 1.0, 1.0),
+    "IA": (0.0, 0.6450980392156863, 1.0, 1.0),
+    "MI (UP)": (0.24984187223276405, 1.0, 0.717900063251107, 1.0),
+    "WI": (0.7179000632511068, 1.0, 0.2498418722327641, 1.0),
+    "Chicago": (1.0, 0.7269426289034134, 0.0, 1.0),
+    "MN": (1.0, 0.18954248366013093, 0.0, 1.0),
+}
 
 # cntlreg/not_cntlreg color map
-colorPalette = sns.color_palette(palette="bright", n_colors=2)
-cm_cntlreg = dict(zip([True, False], colorPalette))
+# colorPalette = sns.color_palette(palette="bright", n_colors=2)
+# cm_cntlreg = dict(zip([True, False], colorPalette))
+
+cm_cntlreg = {
+    True: (0.00784313725490196, 0.24313725490196078, 1.0),
+    False: (1.0, 0.48627450980392156, 0.0),
+}
 
 
 # cntlreg/not_cntlreg color map
-colorPalette = sns.color_palette(palette="bright", n_colors=4)
-cm_fossil = dict(
-    zip(
-        [
-            ("Renew", "Cntl Reg"),
-            ("Fossil", "Not Cntl Reg"),
-            ("Renew", "Not Cntl Reg"),
-            ("Fossil", "Cntl Reg"),
-        ],
-        colorPalette,
-    )
-)
-
+# colorPalette = sns.color_palette(palette="bright", n_colors=4)
+# cm_fossil = dict(
+#     zip(
+#         [
+#             ("Renew", "Cntl Reg"),
+#             ("Fossil", "Not Cntl Reg"),
+#             ("Renew", "Not Cntl Reg"),
+#             ("Fossil", "Cntl Reg"),
+#         ],
+#         colorPalette,
+#     )
+# )
+cm_fossil = {
+    ("Renew", "Cntl Reg"): (0.00784313725490196, 0.24313725490196078, 1.0),
+    ("Fossil", "Not Cntl Reg"): (1.0, 0.48627450980392156, 0.0),
+    ("Renew", "Not Cntl Reg"): (
+        0.10196078431372549,
+        0.788235294117647,
+        0.2196078431372549,
+    ),
+    ("Fossil", "Cntl Reg"): (0.9098039215686274, 0.0, 0.043137254901960784),
+}
 
 # costs color map
-cost_values = list(cost_map.values())
-cost_values.sort()
-colorPalette = sns.color_palette(palette="bright", n_colors=len(cost_map))
-cm_cost = dict(zip(cost_values, colorPalette))
+# cost_values = list(cost_map.values())
+# cost_values.sort()
+# colorPalette = sns.color_palette(palette="bright", n_colors=len(cost_map))
+# cm_cost = dict(zip(cost_values, colorPalette))
+
+
+cm_cost = {
+    "Cost of Lost Load": (0.00784313725490196, 0.24313725490196078, 1.0),
+    "Investment Costs": (1.0, 0.48627450980392156, 0.0),
+    "Maintenance Costs": (0.10196078431372549, 0.788235294117647, 0.2196078431372549),
+    "Operational Costs": (0.9098039215686274, 0.0, 0.043137254901960784),
+}

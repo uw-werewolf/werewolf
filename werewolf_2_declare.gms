@@ -43,19 +43,23 @@ SET hrs 'hours in a year';
 SET map_block_hour(i,b,hrs) 'map between regions, loadblocks and hours of the year';
 
 PARAMETER ldc_compact(t,b,i) 'electrical demand (units: MW)';
+PARAMETER ldc_compact_2020(t,b,i) 'electrical demand (units: MW)';
+PARAMETER ldc_compact_new_baseload(t,b,i) 'electrical demand (units: MW)';
 PARAMETER loadblockhours_compact(t,b) '# of hours per loadblock';
 
 $GDXIN '.%sep%gdx_temp%sep%ldc_fit.gdx'
 $LOAD t<ldc_compact.dim1
 $LOAD b<ldc_compact.dim2
 $LOADDC ldc_compact
+$LOADDC ldc_compact_2020
+$LOADDC ldc_compact_new_baseload
+
 
 $LOAD hrs<map_block_hour.dim3
 $LOADDC map_block_hour
 $LOADDC loadblockhours_compact
 $GDXIN
 *-------------------
-
 
 
 *-----------------
@@ -424,11 +428,13 @@ wprob(t,wn,sn,hn)$scn(t,wn,sn,hn) = 1 / card(scn);
 
 PARAMETER loadblockhours(t,wn,sn,hn,b) '# of hours per loadblock';
 PARAMETER ldc(t,wn,sn,hn,a,b,i) 'agent-based electrical demand (units: MW)';
-* PARAMETER loadblockdays(t,wn,sn,hn,i);
+PARAMETER ldc_total(t,wn,sn,hn,a,b,i) 'agent-based electrical demand (units: MW)';
+PARAMETER ldc_2020(t,wn,sn,hn,a,b,i) 'agent-based electrical demand (units: MW)';
+PARAMETER ldc_new_baseload(t,wn,sn,hn,a,b,i) 'agent-based electrical demand (units: MW)';
 
 loadblockhours(scn(t,wn,sn,hn),b) = loadblockhours_compact(t,b);
+
 ldc(scn(t,wn,sn,hn),'demand_agent',b,i) = ldc_compact(t,b,i);
-* loadblockdays(scn(t,wn,sn,hn),i) = loadblockdays_compact(t,i);
-
-
-* EXECUTE_UNLOAD 'decl_out.gdx';
+ldc_total(scn(t,wn,sn,hn),'demand_agent',b,i) = ldc_compact(t,b,i);
+ldc_2020(scn(t,wn,sn,hn),'demand_agent',b,i) = ldc_compact_2020(t,b,i);
+ldc_new_baseload(scn(t,wn,sn,hn),'demand_agent',b,i) = ldc_compact_new_baseload(t,b,i);
