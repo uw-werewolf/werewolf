@@ -5,12 +5,18 @@ $IFTHENI %system.filesys% == UNIX $SET sep "/"
 $ELSE $SET sep "\"
 $ENDIF
 
+OPTION limrow = 0;
+OPTION limcol = 0;
+
 $IF NOT SETGLOBAL almostsure $SETGLOBAL almostsure 0
 $IF NOT SETGLOBAL wind_scn $SETGLOBAL wind_scn 10
 $IF NOT SETGLOBAL solar_scn $SETGLOBAL solar_scn 1
 $IF NOT SETGLOBAL hydro_scn $SETGLOBAL hydro_scn 1
-$IF NOT SETGLOBAL solar_data_output $SETGLOBAL solar_data_output 0
 
+$IF NOT SETGLOBAL network_arcs $SETGLOBAL network_arcs "network_arcs.gdx"
+$IF NOT SETGLOBAL ldc_fit $SETGLOBAL ldc_fit "ldc_fit.gdx"
+$IF NOT SETGLOBAL werewolf_data $SETGLOBAL werewolf_data "werewolf_data.gdx"
+$IF NOT SETGLOBAL processed_data $SETGLOBAL processed_data "processed_werewolf_data.gdx"
 
 $ONEMPTY
 SCALAR myerrorlevel;
@@ -22,7 +28,7 @@ SCALAR almostsure / %almostsure% /;
 SET i 'regions in the model';
 SET ij(i,i) 'arcs in the network';
 
-$GDXIN '.%sep%gdx_temp%sep%network_arcs.gdx'
+$GDXIN "%network_arcs%"
 $LOAD i<ij.dim1
 $LOADDC ij
 $GDXIN
@@ -47,7 +53,7 @@ PARAMETER ldc_compact_2020(t,b,i) 'electrical demand (units: MW)';
 PARAMETER ldc_compact_new_baseload(t,b,i) 'electrical demand (units: MW)';
 PARAMETER loadblockhours_compact(t,b) '# of hours per loadblock';
 
-$GDXIN '.%sep%gdx_temp%sep%ldc_fit.gdx'
+$GDXIN "%ldc_fit%"
 $LOAD t<ldc_compact.dim1
 $LOAD b<ldc_compact.dim2
 $LOADDC ldc_compact
@@ -77,10 +83,7 @@ SET geothermal(k) 'geothermal technologies';
 SET nuclear(k) 'nuclear technologies';
 SET store(k) 'storage technologies';
 SET battery(k) 'battery technologies';
-SET nrel_solar_PV(k) 'solar PV technologies from NREL';
-SET nrel_offwind(k) 'offshore wind technologies from NREL';
-SET nrel_onwind(k) 'onshore wind technologies from NREL';
-SET cost_bin 'cost bin';
+SET nrel_solar(k) 'solar PV technologies from NREL';
 SET all_wind(k) 'all wind technolgoies';
 SET all_offwind(k) 'all offshore wind technolgoies';
 SET all_onwind(k) 'all onshore wind technolgoies';
@@ -90,9 +93,9 @@ SET all_distsolar_PV(k) 'all distributed solar PV technolgoies';
 SET all_utilsolar_PV(k) 'all utility scale solar PV technolgoies';
 SET all_solar_therm(k) 'all utility scale solar thermal technolgoies';
 
-$GDXIN '.%sep%werewolf_data.gdx'
-$LOAD k, uid, a, prodn, fossil, cost_bin
-$LOADDC gen, hydro, renew, store, nuclear, battery, geothermal, nrel_solar_PV, nrel_onwind, nrel_offwind, all_wind, all_offwind, all_onwind, all_solar, all_solar_PV, all_distsolar_PV, all_utilsolar_PV, all_solar_therm
+$GDXIN "%werewolf_data%"
+$LOAD k, uid, a, prodn, fossil
+$LOADDC gen, hydro, renew, store, nuclear, battery, geothermal, nrel_solar, all_wind, all_offwind, all_onwind, all_solar, all_solar_PV, all_distsolar_PV, all_utilsolar_PV, all_solar_therm
 $GDXIN
 *-----------------
 
@@ -110,12 +113,12 @@ PARAMETER map_center 'lat/lng for the center of all modeled regions';
 PARAMETER cap_agg(i,k) 'aggregated existing nameplate capacity at nodes (units: MW)';
 PARAMETER cap_nrel(k,i) 'technology potential for differnt renewables (units: MW)';
 PARAMETER hr_ave(i,k) 'average heat rate at nodes for each technology type (units: Btu/kWh)';
-PARAMETER nrel_solar_cost(k,i,cost_bin) 'solar costs (units: $/MW)';
+PARAMETER nrel_solar_cost(k,i) 'solar costs (units: $/MW)';
 PARAMETER nrel_solar_cf(k,i,hrs) 'solar capacity factor (units: unitless)';
-PARAMETER nrel_wind_cost(k,i,cost_bin) 'wind costs (units: $/MW)';
+PARAMETER nrel_wind_cost(k,i) 'wind costs (units: $/MW)';
 PARAMETER nrel_wind_cf(k,i,hrs) 'wind capacity factor (units: unitless)';
 
-$GDXIN '.%sep%gdx_temp%sep%processed_werewolf_data.gdx'
+$GDXIN "%processed_data%"
 $LOAD lat, lng, map_center, cap_agg, cap_nrel, hr_ave, not_cntlreg, cntlreg, nrel_solar_cf, nrel_solar_cost, nrel_wind_cf, nrel_wind_cost, growth_factor
 $GDXIN
 *-------------------
@@ -203,21 +206,13 @@ DISPLAY maxCarbon;
 *--------------------
 * Solar model data
 *--------------------
-* $IFTHEN %solar_data_output% == 1
-* EXECUTE_UNLOAD '.%sep%gdx_temp%sep%solar_data.gdx', nrel_solar_cf, map_block_hour, loadblockhours_compact;
-*
-* EXECUTE 'python solar_data.py > %system.nullfile%';
-* myerrorlevel = errorlevel;
-* ABORT$(myerrorlevel <> 0) "ERROR: solar_data.py did not finish successfully...";
-* $ENDIF
-
 * create N solar scenarios to use
 PARAMETER scn_nrel_solar_cf(t,sn,k,i,hrs);
 loop(sn,
 
     scn_nrel_solar_cf(t,sn,k,i,hrs) = nrel_solar_cf(k,i,hrs);
 
-    loop(b, scn_nrel_solar_cf(t,sn,k,i,hrs)$(map_block_hour(i,b,hrs)) = uniform(0,1) * nrel_solar_cf(k,i,hrs)
+    loop(b, scn_nrel_solar_cf(t,sn,k,i,hrs)$(map_block_hour(i,b,hrs)) = uniform(0.5,1) * nrel_solar_cf(k,i,hrs)
 
         );
     );
@@ -243,7 +238,7 @@ loop(wn,
 
     scn_nrel_wind_cf(t,wn,k,i,hrs) = nrel_wind_cf(k,i,hrs);
 
-    loop(b, scn_nrel_wind_cf(t,wn,k,i,hrs)$(map_block_hour(i,b,hrs)) = uniform(0,1) * nrel_wind_cf(k,i,hrs)
+    loop(b, scn_nrel_wind_cf(t,wn,k,i,hrs)$(map_block_hour(i,b,hrs)) = uniform(0.5,1) * nrel_wind_cf(k,i,hrs)
 
         );
     );
@@ -292,9 +287,9 @@ ave_hydro_cf(t,hn,i,k,b) = sum(hrs$(map_block_hour(i,b,hrs)), scn_hydro_cf(t,hn,
 * Battery model data
 *--------------------
 PARAMETER chargerate(k) 'battery charge rate (units: MW)' /
-    'battery_fast' 2.7660
-    'battery_med' 0.8846
-    'battery_slow' 0.1617 /;
+    'Energy_Storage_fast' 2.7660
+    'Energy_Storage_med' 0.8846
+    'Energy_Storage_slow' 0.1617 /;
 *--------------------
 
 
@@ -368,9 +363,9 @@ buildRate('Geothermal') = 50 / (60/12);
 buildRate('Fuel_Cell') = 10 / (20/12);
 
 * assume same as fuel cell
-buildRate('battery_slow') = 10 / (20/12);
-buildRate('battery_med') = 10 / (20/12);
-buildRate('Battery_fast') = 10 / (20/12);
+buildRate('Energy_Storage_slow') = 10 / (20/12);
+buildRate('Energy_Storage_med') = 10 / (20/12);
+buildRate('Energy_Storage_fast') = 10 / (20/12);
 
 * https://www.energy.gov/eere/wind/maps/wind-vision
 
@@ -404,7 +399,29 @@ simuBuild(k) = 0;
 PARAMETER tmu(t,wn,sn,hn,i,k,b) 'capacity factor data container (units: unitless)';
 
 * follow Philpott -- most technologies have a CF = 1 unless wind/solar/hydro
+* tmu(scn(t,wn,sn,hn),i,k,b) = 1;
+
+* follow NREL planned/forced outage rates...
+* initalize tmu first for all technologies and regions, then modify
 tmu(scn(t,wn,sn,hn),i,k,b) = 1;
+tmu(scn(t,wn,sn,hn),i,"Biomass",b) = 0.8175;
+tmu(scn(t,wn,sn,hn),i,"Coal_Steam",b) = 0.7724;
+tmu(scn(t,wn,sn,hn),i,"Combined_Cycle",b) = 0.883;
+tmu(scn(t,wn,sn,hn),i,"Combustion_Turbine",b) = 0.9052;
+tmu(scn(t,wn,sn,hn),i,"Energy_Storage_fast",b) = 0.95;
+tmu(scn(t,wn,sn,hn),i,"Energy_Storage_med",b) = 0.95;
+tmu(scn(t,wn,sn,hn),i,"Energy_Storage_slow",b) = 0.95;
+tmu(scn(t,wn,sn,hn),i,"Energy_Storage",b) = 0.95;
+tmu(scn(t,wn,sn,hn),i,"Fossil_Waste",b) = 0.7724;
+tmu(scn(t,wn,sn,hn),i,"Fuel_Cell",b) = 0.95;
+tmu(scn(t,wn,sn,hn),i,"IGCC",b) = 0.7724;
+tmu(scn(t,wn,sn,hn),i,"Landfill_Gas",b) = 0.5132;
+tmu(scn(t,wn,sn,hn),i,"Municipal_Solid_Waste",b) = 0.5132;
+tmu(scn(t,wn,sn,hn),i,"Non_Fossil_Waste",b) = 0.7724;
+tmu(scn(t,wn,sn,hn),i,"Nuclear",b) = 0.95;
+tmu(scn(t,wn,sn,hn),i,"OG_Steam",b) = 0.7577;
+tmu(scn(t,wn,sn,hn),i,"Tires",b) = 0.7724;
+
 tmu(scn(t,wn,sn,hn),i,geothermal,b) = 0.85;
 
 * Add hydro intermittency
@@ -412,15 +429,13 @@ tmu(scn(t,wn,sn,hn),i,hydro,b) = ave_hydro_cf(t,hn,i,hydro,b);
 
 * Add wind intermittency
 * need to assume a CF for generic 'On/Offshore_Wind' technologies
-tmu(scn(t,wn,sn,hn),i,'Onshore_Wind',b) = ave_wind_cf(t,wn,i,'Onshore_Wind_2',b);
-tmu(scn(t,wn,sn,hn),i,'Offshore_Wind',b) = ave_wind_cf(t,wn,i,'Offshore_Wind_2',b);
-tmu(scn(t,wn,sn,hn),i,nrel_onwind,b) = ave_wind_cf(t,wn,i,nrel_onwind,b);
-tmu(scn(t,wn,sn,hn),i,nrel_offwind,b) = ave_wind_cf(t,wn,i,nrel_offwind,b);
+tmu(scn(t,wn,sn,hn),i,'Onshore_Wind',b) = ave_wind_cf(t,wn,i,'Onshore_Wind',b);
+tmu(scn(t,wn,sn,hn),i,'Offshore_Wind',b) = ave_wind_cf(t,wn,i,'Offshore_Wind',b);
 
 * Add solar capacity factors
 * need to assume a CF for generic 'Solar_PV' technologies
-tmu(scn(t,wn,sn,hn),i,'Solar_PV',b) = ave_solar_cf(t,sn,i,'SolarUtil_PV_2',b);
-tmu(scn(t,wn,sn,hn),i,nrel_solar_PV,b) = ave_solar_cf(t,sn,i,nrel_solar_PV,b);
+tmu(scn(t,wn,sn,hn),i,'Solar_PV',b) = ave_solar_cf(t,sn,i,'SolarUtil',b);
+tmu(scn(t,wn,sn,hn),i,nrel_solar,b) = ave_solar_cf(t,sn,i,nrel_solar,b);
 
 * scenario weightings
 PARAMETER wprob(t,wn,sn,hn);

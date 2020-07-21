@@ -5,39 +5,30 @@ $IFTHENI %system.filesys% == UNIX $SET sep "/"
 $ELSE $SET sep "\"
 $ENDIF
 
-
-$IF NOT SET reldir $SETGLOBAL reldir '.'
-$IF NOT SET folder $SETGLOBAL folder 'results'
-SET results_folder '%reldir%%sep%output%sep%%folder%%sep%' / 1 /;
-
-$IF NOT DEXIST '%reldir%%sep%output' $CALL mkdir '%reldir%%sep%output'
-$IF DEXIST '%reldir%%sep%output%sep%%folder%' ABORT 'results directory already exists, rename or remove existing'
-
-
-*-------------------
-* Create results directory structure
-*-------------------
-$IF NOT DEXIST '%reldir%%sep%output%sep%%folder%' $CALL mkdir '%reldir%%sep%output%sep%%folder%'
-$IF NOT DEXIST '%reldir%%sep%output%sep%%folder%%sep%summary_maps' $CALL mkdir '%reldir%%sep%output%sep%%folder%%sep%summary_maps'
-
-$IF NOT DEXIST '%reldir%%sep%output%sep%%folder%%sep%summary_plots' $CALL mkdir '%reldir%%sep%output%sep%%folder%%sep%summary_plots'
-
-$IF NOT DEXIST '%reldir%%sep%output%sep%%folder%%sep%summary_maps%sep%built_capacity' $CALL mkdir '%reldir%%sep%output%sep%%folder%%sep%summary_maps%sep%built_capacity'
-
-$IF NOT DEXIST '%reldir%%sep%output%sep%%folder%%sep%summary_maps%sep%generation' $CALL mkdir '%reldir%%sep%output%sep%%folder%%sep%summary_maps%sep%generation'
-
-$IF NOT DEXIST '%reldir%%sep%output%sep%%folder%%sep%summary_maps%sep%total_capacity' $CALL mkdir '%reldir%%sep%output%sep%%folder%%sep%summary_maps%sep%total_capacity'
-*-------------------
-
-
 OPTION limrow = 0;
 OPTION limcol = 0;
 
-SCALAR frac / 0 /;
-SCALAR co2redn / 1 /;
-SCALAR capredn / 0 /;
-SCALAR nrenergyredn / 0 /;
-SCALAR carbonleakage '1 => no constraint on imports to cntlreg, can be in an almostsure model'/ 1 /;
+$IF NOT SETGLOBAL frac $SETGLOBAL frac 0
+$IF NOT SETGLOBAL co2redn $SETGLOBAL co2redn 0
+$IF NOT SETGLOBAL capredn $SETGLOBAL capredn 0
+$IF NOT SETGLOBAL nrenergyredn $SETGLOBAL nrenergyredn 0
+$IF NOT SETGLOBAL carbonleakage $SETGLOBAL carbonleakage 1
+$IF NOT SETGLOBAL policy_model $SETGLOBAL policy_model 0
+$IF NOT SETGLOBAL demand_model $SETGLOBAL demand_model 0
+
+ABORT$(%policy_model% = 1 AND %demand_model% = 1) "must choose either demand model or policy model";
+ABORT$(%policy_model% = 0 AND %demand_model% = 0) "must choose either demand model or policy model";
+
+$IF NOT SETGLOBAL processed_data $SETGLOBAL processed_data "processed_werewolf_data.gdx"
+$IF NOT SETGLOBAL final_results $SETGLOBAL final_results "final_results.gdx"
+$IF NOT SETGLOBAL frac_gdx $SETGLOBAL frac_gdx "frac_gdx.gdx"
+$IF NOT SETGLOBAL solve_model $SETGLOBAL solve_model "solve_mode.gdx"
+
+SCALAR frac / %frac% /;
+SCALAR co2redn / %co2redn% /;
+SCALAR capredn / %capredn% /;
+SCALAR nrenergyredn / %nrenergyredn% /;
+SCALAR carbonleakage '1 => no constraint on imports to cntlreg, can be in an almostsure model'/ %carbonleakage% /;
 
 SCALAR tlossval / 0.01 /;
 
@@ -94,7 +85,7 @@ SCALAR CVARalpha 'CVaR parameter (unitless factor)' / 0.10 /;
 SCALAR lambda 'risk parameter lambda (unitless factor)' / 0.1 /;
 SCALAR v 'value of lost load (units: $)' / 10000 /;
 
-$GDXIN '.%sep%gdx_temp%sep%processed_werewolf_data.gdx'
+$GDXIN "%processed_data%"
 $LOAD eC, oC, gC
 $GDXIN
 
@@ -401,244 +392,110 @@ MODEL capsysopt / sysobjdef,
 *                  nonanticS1,
 *                  nonanticS2 /;
 
-
-
-
-*-------------------
-* Year 2020 Model Constraints
-*-------------------
-* scale back load duration curve to current day (2020)
-ldc(t,wn,sn,hn,a,b,i) = ldc_2020(t,wn,sn,hn,a,b,i);
-
-* limit the amount of load shed that is possible
-q.UP(scn(t,wn,sn,hn),a,i,b)$inb(t,wn,sn,hn,i,b) = fractionLR * ldc(t,wn,sn,hn,a,b,i);
-
-* transmission line capacities
-f.UP(scn(t,wn,sn,hn),i,j,b)$ij(i,j) = fcap(i,j);
-
-* provide some sort of upper bound to investment
-* no capacity expansion for Year 2020 -- run system as is
-x.UP(a,i,k)$aik(a,i,k) = 0;
-
-* no shutdowns -- run system as is
-x.LO(a,i,k)$aik(a,i,k) = 0;
-z.LO(a,i,k)$aik(a,i,k) = capU(a,i,k);
-
-* SOLVE Year 2020 Model
-frac = 0;
-co2redn = 0;
-capredn = 0;
-nrenergyredn = 0;
-carbonleakage = 1;
-SOLVE capsysopt USING lp min sysobj;
-
-* calculate year 2020 carbon emissions and non-renewable capacity
-maxCarbon = sum((scn(t,wn,sn,hn),a,i,k,b)$(aik(a,i,k) AND carbemit(i,k) AND cntlreg(i)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b) * MMTonnesCO2(i,k));
-
-maxNR = sum((a,i,k)$(aik(a,i,k) AND cntlreg(i) AND (NOT renew(k))), z.L(a,i,k));
-
-DISPLAY maxCarbon;
-DISPLAY maxNR;
-
-
 PARAMETER z_cntlreg(k,*) 'total capacity for the cntlreg by technology and policy scenario (units: MW)';
 PARAMETER x_cntlreg(k,*) 'total built/shutdown capacity for the cntlreg by technology and policy scenario (units: MW)';
 PARAMETER y_cntlreg(k,*) 'actual generation for the cntlreg by policy scenario (units: MWh)';
 
-z_cntlreg(k,'2020') = eps + sum((a,i)$cntlreg(i), z.L(a,i,k));
-x_cntlreg(k,'2020') = eps + sum((a,i)$cntlreg(i), x.L(a,i,k));
-y_cntlreg(k,'2020') = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum((a,i)$cntlreg(i), sum(b, y.L(t,wn,sn,hn,a,i,k,b) * loadblockhours_compact(t,b))));
-*-------------------
 
-* parameter gen_test1(k);
-* gen_test1(k) = sum((scn(t,wn,sn,hn),a,i,b)$(aik(a,i,k) AND cntlreg(i)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b));
-*
-* parameter test1(k);
-* test1(k) = sum((a,i)$(aik(a,i,k) AND cntlreg(i)), z.L(a,i,k));
-*
-* option gen_test1:0:0:1;
-* display gen_test1;
-*
-* option test1:0:0:5;
-* display test1;
+$IFTHEN %policy_model% == 1
+EXECUTE "echo RUNNING... policy model";
+$INCLUDE werewolf_3_1_policy_model.gms
+$ENDIF
 
+$IFTHEN %demand_model% == 1
+EXECUTE "echo RUNNING... demand model";
+$INCLUDE werewolf_3_1_demand_model.gms
+$ENDIF
 
-*-------------------
-* Year %proj_year% (baseline) Model Constraints
-*-------------------
-* scale to %proj_year% with growth_factor
-ldc(t,wn,sn,hn,a,b,i) = ldc_total(t,wn,sn,hn,a,b,i);
-
-* limit the amount of load shed that is possible
-q.UP(scn(t,wn,sn,hn),a,i,b)$inb(t,wn,sn,hn,i,b) = fractionLR * ldc(t,wn,sn,hn,a,b,i);
-
-* transmission line capacities
-f.UP(scn(t,wn,sn,hn),i,j,b)$ij(i,j) = fcap(i,j);
-
-* provide upper bound to investment (investment can happen anywhere in the system)
-$INCLUDE 'baseline_capacity_expansion_limits.gms'
-aik(a,i,k) = yes$(prodn(a) AND capU(a,i,k) + u(a,i,k) > 0);
-* reset constraint
-x.UP(a,i,k)$aik(a,i,k) = inf;
-x.UP(a,i,k)$aik(a,i,k) = u(a,i,k);
-
-* * shutdowns not allowed
-* x.LO(a,i,k)$aik(a,i,k) = 0;
-* z.LO(a,i,k)$aik(a,i,k) = capU(a,i,k);
-
-* shutdowns allowed
-x.LO(a,i,k)$aik(a,i,k) = -capU(a,i,k);
-z.LO(a,i,k)$aik(a,i,k) = 0;
-
-
-* SOLVE baseline scenario model
-frac = 0;
-* must hold baseline policy to that generated in 2020
-co2redn = 1;
-capredn = 0;
-nrenergyredn = 0;
-carbonleakage = 1;
-SOLVE capsysopt USING lp min sysobj;
-
-* calculate imports into cntlreg
-$IFTHEN.imports almostsure == 1
-baseline_imports(scn(t,wn,sn,hn),not_cntlreg(i),b) = sum(ij(i,j)$cntlreg(j), wprob(t,wn,sn,hn) * f.L(t,wn,sn,hn,i,j,b));
-$ELSE.imports
-baseline_imports(not_cntlreg(i),b) = sum(ij(i,j)$cntlreg(j), sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f.L(t,wn,sn,hn,i,j,b)));
-$ENDIF.imports
-
-display baseline_imports;
-
-z_cntlreg(k,'2030') = eps + sum((a,i)$cntlreg(i), z.L(a,i,k));
-x_cntlreg(k,'2030') = eps + sum((a,i)$cntlreg(i), x.L(a,i,k));
-y_cntlreg(k,'2030') = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum((a,i)$cntlreg(i), sum(b, y.L(t,wn,sn,hn,a,i,k,b) * loadblockhours_compact(t,b))));
-*-------------------
-
-
-
-*-------------------
-* Define SCENARIO Model
-*-------------------
-* provide upper bound to investment (investment can happen only in cntlreg)
-* $INCLUDE 'baseline_capacity_expansion_limits.gms'
-* aik(a,i,k) = yes$(prodn(a) AND capU(a,i,k) + u(a,i,k) > 0);
-* x.UP(a,i,k)$aik(a,i,k) = inf;
-* x.UP(a,i,k)$aik(a,i,k) = u(a,i,k);
-
-* fix expansion in not_cntlreg
-x.FX(a,not_cntlreg(i),k)$aik(a,i,k) = x.L(a,i,k);
-
-
-SET r 'scenario iteration' / 1*10 /;
-SET rr / 2020, 2030, #r /;
-PARAMETER frac_r(r) /
-    '1' 0.00
-    '2' 0.10
-    '3' 0.20
-    '4' 0.30
-    '5' 0.40
-    '6' 0.50
-    '7' 0.60
-    '8' 0.70
-    '9' 0.80
-    '10' 0.90/;
-frac_r(r) = eps + frac_r(r);
-
-
-*-------------------
-* Output data containers
-*-------------------
-SET ctype / 'Invest', 'Maintain', 'Operate', 'LostLoad' /;
-PARAMETER build(i,k,r);
-PARAMETER ZZ(t,wn,sn,hn,r);
-PARAMETER ZZ_i(t,wn,sn,hn,i,r);
-PARAMETER ZL(t,wn,sn,hn,r);
-PARAMETER ZL_i(t,wn,sn,hn,i,r);
-PARAMETER TotalCost(r);
-PARAMETER lostMWhours(r);
-PARAMETER capacity(i,k,r);
-PARAMETER capacity_2(i,k,r);
-PARAMETER ExpCost_r(ctype,r);
-PARAMETER ExpCost_ir(ctype,i,r);
-* PARAMETER TotalCarbon(a,i,k,b,r);
-PARAMETER TotalCarbon_r(r);
-PARAMETER TotalCarbon_ir(i,r);
-PARAMETER Co2price(r);
-PARAMETER f_out(t,wn,sn,hn,i,j,b,r);
-PARAMETER y_out(t,wn,sn,hn,i,k,b,r);
-PARAMETER q_out(t,wn,sn,hn,i,b,r);
-*-------------------
-
-
-* Loop over policy scenarios
-* SET x_title 'Demand Increase (%)' / 1 /;
-SET x_title 'Carbon Reduction (% from baseline)' / 1 /;
-* SET x_title 'Max Non-Renewable Capacity Reduction (% from baseline)' / 1 /;
-* SET x_title 'Carbon Reduction, w/Demand Shock (% from baseline)' / 1 /;
-
-
-LOOP(r,
-frac = frac_r(r);
-carbonleakage = 0;
-
-SOLVE capsysopt USING lp min sysobj;
-
-f_out(scn(t,wn,sn,hn),i,j,b,r) = eps + f.L(t,wn,sn,hn,i,j,b);
-y_out(scn(t,wn,sn,hn),i,k,b,r) = eps + sum(a, y.L(t,wn,sn,hn,a,i,k,b));
-q_out(scn(t,wn,sn,hn),i,b,r) = eps + sum(a, q.L(t,wn,sn,hn,a,i,b));
-
-build(i,k,r) = eps + sum(a, x.L(a,i,k));
-capacity(i,k,r) = eps + sum(a, z.L(a,i,k));
-capacity_2(i,k,r) = eps + sum(a, z.L(a,i,k) * (1$(NOT battery(k)) + chargerate(k)$battery(k)));
-
-ZZ(scn(t,wn,sn,hn),r) = eps + sum(a, sum((i,k,b)$(aik(a,i,k) AND gen(k)), loadblockhours(t,wn,sn,hn,b) * gcost(k,y.L(t,wn,sn,hn,a,i,k,b))) + sum((i,b)$inb(t,wn,sn,hn,i,b), loadblockhours(t,wn,sn,hn,b) * (capR * q.L(t,wn,sn,hn,a,i,b) + v * q.L(t,wn,sn,hn,a,i,b))));
-
-ZL(scn(t,wn,sn,hn),r) = eps + sum(a, sum((i,b)$inb(t,wn,sn,hn,i,b), loadblockhours(t,wn,sn,hn,b) * (v * q.L(t,wn,sn,hn,a,i,b))));
-
-ZZ_i(scn(t,wn,sn,hn),i,r) = eps + sum(a, sum((k,b)$(aik(a,i,k) AND gen(k)), loadblockhours(t,wn,sn,hn,b) * gcost(k,y.L(t,wn,sn,hn,a,i,k,b))) + sum(b$inb(t,wn,sn,hn,i,b), loadblockhours(t,wn,sn,hn,b) * (capR * q.L(t,wn,sn,hn,a,i,b) + v * q.L(t,wn,sn,hn,a,i,b))));
-
-ZL_i(scn(t,wn,sn,hn),i,r) = eps + sum(a, sum((b)$inb(t,wn,sn,hn,i,b), loadblockhours(t,wn,sn,hn,b) * (v * q.L(t,wn,sn,hn,a,i,b))));
-
-
-
-
-ExpCost_ir('Invest',i,r) = eps + sum(a, sum(k$aik(a,i,k), ecost(k,i,x.L(a,i,k)))) / scalefac;
-ExpCost_ir('Maintain',i,r) = eps + sum(a, sum(k$aik(a,i,k), ocost(k,z.L(a,i,k)))) / scalefac;
-
-ExpCost_ir('Operate',i,r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * ZZ_i(t,wn,sn,hn,i,r)) / scalefac;
-ExpCost_ir('LostLoad',i,r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * ZL_i(t,wn,sn,hn,i,r)) / scalefac;
-
-ExpCost_r('Invest',r) = eps + sum(a, sum((i,k)$aik(a,i,k), ecost(k,i,x.L(a,i,k)))) / scalefac;
-ExpCost_r('Maintain',r) = eps + sum(a, sum((i,k)$aik(a,i,k), ocost(k,z.L(a,i,k)))) / scalefac;
-ExpCost_r('Operate',r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * ZZ(t,wn,sn,hn,r)) / scalefac;
-ExpCost_r('LostLoad',r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * ZL(t,wn,sn,hn,r)) / scalefac;
-
-TotalCost(r) = sysobj.L / scalefac;
-
-* TotalCarbon(aik(a,i,k),b,r)$(carbemit(i,k)) = max(eps, sum(scn(t,wn,sn,hn)$(cntlreg(i)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b) * MMTonnesCO2(i,k)));
-
-TotalCarbon_r(r) = eps + sum((scn(t,wn,sn,hn),a,i,k,b)$(aik(a,i,k) AND carbemit(i,k)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b) * MMTonnesCO2(i,k));
-
-TotalCarbon_ir(i,r) = eps + sum((scn(t,wn,sn,hn),a,k,b)$(aik(a,i,k) AND carbemit(i,k)), wprob(t,wn,sn,hn) * loadblockhours(t,wn,sn,hn,b) * y.L(t,wn,sn,hn,a,i,k,b) * MMTonnesCO2(i,k));
-
-Co2price(r) = eps + (co2cap.M$co2redn + renewcap.M$capredn + energycap.M$nrenergyredn) / scalefac;
-
-lostMWhours(r) =  eps + sum(a, sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum((i,b)$inb(t,wn,sn,hn,i,b), loadblockhours(t,wn,sn,hn,b) * (q.L(t,wn,sn,hn,a,i,b)))));
-
-z_cntlreg(k,r) = eps + sum((a,i)$cntlreg(i), z.L(a,i,k));
-x_cntlreg(k,r) = eps + sum((a,i)$cntlreg(i), x.L(a,i,k));
-y_cntlreg(k,r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum((a,i)$cntlreg(i), sum(b, y.L(t,wn,sn,hn,a,i,k,b) * loadblockhours_compact(t,b))));
-);
-*-------------------
 
 display x_cntlreg;
 display z_cntlreg;
 display y_cntlreg;
 
 
+*-------------------
+* Generation results
+*-------------------
+PARAMETER y_ikr(i,k,r) 'actual generation by agent, region, technology, policy scenario (units: MWh)';
+y_ikr(i,k,r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum(b, y_out(t,wn,sn,hn,i,k,b,r) * loadblockhours_compact(t,b)));
+
+
+PARAMETER y_ir(i,r) 'actual generation by agent, region, policy scenario (units: MWh)';
+y_ir(i,r) = eps + sum(k, sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum(b, y_out(t,wn,sn,hn,i,k,b,r) * loadblockhours_compact(t,b))));
+
+
+PARAMETER y_r(r) 'actual generation by agent, policy scenario (units: MWh)';
+y_r(r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * sum(i, sum(k, sum(b, y_out(t,wn,sn,hn,i,k,b,r) * loadblockhours_compact(t,b)))));
+*-------------------
+
+
 
 *-------------------
-* Include file that contains aggregate metrics
+* Transmission results
+*-------------------
+PARAMETER f_ijbr(i,j,b,r) 'power trasmission by from region, to region, loadblock, policy scenario (units: MW)';
+f_ijbr(i,j,b,r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f_out(t,wn,sn,hn,i,j,b,r));
+
+PARAMETER f_ijr(i,j,r) 'power trasmission by from region, to region, policy scenario (units: MW)';
+f_ijr(i,j,r) = eps + sum(b, sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f_out(t,wn,sn,hn,i,j,b,r)));
+*-------------------
+
+
+*-------------------
+* Net transmission from neighboring regions
+*-------------------
+PARAMETER import_ibr(i,b,r);
+import_ibr(i,b,r) = eps + sum(ij(i,j)$(not_cntlreg(i) and cntlreg(j)), sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f_out(t,wn,sn,hn,i,j,b,r)));
+
+PARAMETER import_ir(i,r);
+import_ir(i,r) = eps + sum(ij(i,j)$(not_cntlreg(i) and cntlreg(j)), sum(b, sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f_out(t,wn,sn,hn,i,j,b,r))));
+
+
+PARAMETER export_ibr(i,b,r);
+export_ibr(i,b,r) = eps + sum(ij(i,j)$(not_cntlreg(i) and cntlreg(j)), sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f_out(t,wn,sn,hn,j,i,b,r)));
+
+PARAMETER export_ir(i,r);
+export_ir(i,r) = eps + sum(ij(i,j)$(not_cntlreg(i) and cntlreg(j)), sum(b, sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * f_out(t,wn,sn,hn,j,i,b,r))));
+*-------------------
+
+
+*-------------------
+* Load shed results
+*-------------------
+PARAMETER q_ibr(i,b,r) 'power shed by agent, region, loadblock, policy scenario (units: MW)';
+q_ibr(i,b,r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * q_out(t,wn,sn,hn,i,b,r));
+
+PARAMETER q_ir(i,r) 'power shed by agent, region, policy scenario (units: MW)';
+q_ir(i,r) = eps + sum(b, sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * q_out(t,wn,sn,hn,i,b,r)));
+*-------------------
+
+
+*-------------------
+* Operating costs
+*-------------------
+PARAMETER ZZ_r(r) 'total operating costs by policy scenario (units: $)';
+ZZ_r(r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * ZZ(t,wn,sn,hn,r));
+*-------------------
+
+
+*-------------------
+* Value of lost load
+*-------------------
+PARAMETER ZL_r(r) 'total value of lost load by policy scenario (units: $)';
+ZL_r(r) = eps + sum(scn(t,wn,sn,hn), wprob(t,wn,sn,hn) * ZL(t,wn,sn,hn,r));
+*-------------------
+
+
+*-------------------
+* Unload results
+*-------------------
+EXECUTE_UNLOAD "%final_results%";
+*-------------------
+
+$exit
+
+*-------------------
+* Include file that contains python scripts
 *-------------------
 $INCLUDE werewolf_4_reports.gms
 *-------------------

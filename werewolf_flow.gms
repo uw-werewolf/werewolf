@@ -9,11 +9,11 @@ EXECUTE 'python werewolf_data_pipe.py'
 *
 
 * werewolf_0_disagg.gms will disaggregate the EPA data into FIPS regions
-EXECUTE 'gams werewolf_0_disagg.gms s=disagg o=/dev/null'
+EXECUTE 'gams werewolf_0_disagg.gms s=disaggregated_data o=/dev/null'
 
 * werewolf_1_aggr.gms will aggregate the FIPS level data into custom regions specified by the user
 * also allows the user to adjust the LDCs before they are grouped into loadblocks
-EXECUTE 'gams werewolf_1_aggr.gms r=disagg o=/dev/null --ev_factor 0.50'
+EXECUTE 'gams werewolf_1_aggr.gms r=disaggregated_data o=/dev/null --ev_factor 0.50'
 
 * werewolf_2_aggr.gms will generate the solar/wind/hydro models used in the SP part of the model
 EXECUTE 'gams werewolf_2_declare.gms s=vre_models o=/dev/null'

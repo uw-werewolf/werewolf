@@ -5,8 +5,8 @@ import folium
 from itertools import permutations
 from scipy.spatial import Delaunay
 from geopy.distance import geodesic
-import filesys as fs
 import os
+import argparse
 
 
 def create_circle_with_radius(lat, lng, radiusMiles):
@@ -116,9 +116,20 @@ def max_network_distance(geoPts):
 
 if __name__ == "__main__":
 
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "nodes.gdx"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
 
-    gdx.rgdx()
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+
+    args = parser.parse_args()
+
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "processed_werewolf_data.gdx")
+    )
+
+    gdx.rgdx(["i", "lat", "lng", "map_aggr"])
 
     i = gdx.to_dataframe("i")
     lat = gdx.to_dataframe("lat")
@@ -146,7 +157,7 @@ if __name__ == "__main__":
     }
 
     # create gdx container
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir)
+    gdx = gmsxfr.GdxContainer(args.gams_sysdir)
     gdx.validate(data)
     gdx.add_to_gdx(data, standardize_data=True, inplace=True, quality_checks=False)
-    gdx.write_gdx(os.path.join(fs.gdx_temp, "network_arcs.gdx"), compress=True)
+    gdx.write_gdx(os.path.join(args.data_repo, "network_arcs.gdx"), compress=True)

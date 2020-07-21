@@ -2,27 +2,37 @@ import pandas as pd
 import json
 import shapely.ops
 import shapely.geometry
-import filesys as fs
 import gmsxfr
 import os
+import argparse
 
 
-def create_geojson():
-    with open(os.path.join(fs.raw_data_dir, "county_borders.json")) as f:
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--data_dir", dest="data_dir", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+    # parser.set_defaults(support_data="some path here")
+    # parser.set_defaults(data_dir="some path here")
+
+    args = parser.parse_args()
+
+    with open(os.path.join(args.data_dir, "county_borders.json")) as f:
         geodata = json.load(f)
 
     n = {"type": "FeatureCollection", "features": []}
 
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "nodes.gdx"))
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "processed_werewolf_data.gdx")
+    )
+    gdx.rgdx(["i", "map_aggr"])
 
     model_regions = gdx.to_dataframe("i")
     map_aggr = gdx.to_dataframe("map_aggr")
-
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
-
-    results_path = gdx.symText["results_folder"]
 
     m = map_aggr["elements"].copy()
 
@@ -70,10 +80,5 @@ def create_geojson():
             )
 
         # write json
-        with open(os.path.join(results_path, "regions.json"), "w") as outfile:
+        with open(os.path.join(args.data_repo, "regions.json"), "w") as outfile:
             json.dump(new_geodata, outfile)
-
-
-if __name__ == "__main__":
-
-    create_geojson()

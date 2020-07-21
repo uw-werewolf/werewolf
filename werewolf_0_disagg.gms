@@ -8,17 +8,6 @@ $ENDIF
 
 $ONEMPTY
 
-
-$IF NOT SETGLOBAL proj_year $SETGLOBAL proj_year 2030
-
-* controls the growth of demand
-* EIA AEO 2020 says that demand will grow at approximately 0.8% year by year
-* https://www.eia.gov/outlooks/aeo/data/browser/#/?id=8-AEO2020&cases=ref2020&sourcekey=0
-SCALAR annual_demand_growth_pct / 0.8 /;
-PARAMETER growth_factor;
-growth_factor = (1 + annual_demand_growth_pct/100)**(%proj_year% - 2020);
-
-
 *-----------------
 * LOAD SETS
 *-----------------
@@ -31,9 +20,6 @@ $LOAD uid
 
 SET hrs 'hours in a year';
 $LOAD hrs
-
-SET cost_bin 'cost bin';
-$LOAD cost_bin
 
 SET epoch 'timestamp';
 $LOAD epoch
@@ -53,6 +39,9 @@ $LOAD state
 
 SET fips(regions) 'All FIPS codes';
 $LOAD fips
+
+SET offshore_fips(regions) 'FIPS codes that have shoreline';
+$LOAD offshore_fips
 
 SET ipm(regions) 'IPM regions';
 $LOAD ipm
@@ -93,14 +82,8 @@ $LOADDC store
 SET battery(k) 'battery technologies';
 $LOADDC battery
 
-SET nrel_solar_PV(k) 'solar PV technologies';
-$LOADDC nrel_solar_PV
-
-SET nrel_onwind(k) 'onshore wind technologies';
-$LOADDC nrel_onwind
-
-SET nrel_offwind(k) 'offshore wind technologies';
-$LOADDC nrel_offwind
+SET nrel_solar(k) 'solar PV technologies';
+$LOADDC nrel_solar
 
 SET all_wind(k) 'all wind technolgoies';
 $LOADDC all_wind
@@ -148,7 +131,6 @@ SET map_fips_reeds_regions(regions,regions) 'map between FIPS5 codes and NREL Re
 $LOADDC map_fips_reeds_regions
 
 ALIAS(fips,fips_p);
-ALIAS(cost_bin,cost_bin_p);
 *-----------------
 
 
@@ -156,19 +138,19 @@ ALIAS(cost_bin,cost_bin_p);
 *-----------------
 * LOAD PARAMETERS
 *-----------------
-PARAMETER nrel_solar_cap(k,regions,cost_bin) 'solar potential capacity (units: MW)';
+PARAMETER nrel_solar_cap(k,regions) 'solar potential capacity (units: MW)';
 $LOADDC nrel_solar_cap
 
-PARAMETER nrel_solar_cost(k,regions,cost_bin) 'solar costs (units: $/MW)';
+PARAMETER nrel_solar_cost(k,regions) 'solar costs (units: $/MW)';
 $LOADDC nrel_solar_cost
 
 PARAMETER nrel_solar_cf(k,regions,hrs) 'solar capacity factor (units: unitless)';
 $LOADDC nrel_solar_cf
 
-PARAMETER nrel_wind_cap(k,regions,cost_bin) 'wind potential capacity (units: MW)';
+PARAMETER nrel_wind_cap(k,regions) 'wind potential capacity (units: MW)';
 $LOADDC nrel_wind_cap
 
-PARAMETER nrel_wind_cost(k,regions,cost_bin) 'wind costs (units: $/MW)';
+PARAMETER nrel_wind_cost(k,regions) 'wind costs (units: $/MW)';
 $LOADDC nrel_wind_cost
 
 PARAMETER nrel_wind_cf(k,regions,hrs) 'wind capacity factor (units: unitless)';
@@ -177,15 +159,14 @@ $LOADDC nrel_wind_cf
 PARAMETER ldc_raw(epoch,hrs,regions) 'load duration curves for 2020';
 $LOADDC ldc_raw
 
-PARAMETER ldc_raw_scaled(epoch,hrs,regions) 'scaled load duration curves';
-* scale demand to reflect future demand in year = %proj_year%
-ldc_raw_scaled(time(epoch,hrs),regions) = growth_factor * ldc_raw(epoch,hrs,regions);
-
 PARAMETER lat(regions) 'latitude';
 $LOADDC lat
 
 PARAMETER lng(regions) 'longitude';
 $LOADDC lng
+
+PARAMETER miso_gen(regions,k,*) 'Projects listed in the MISO Generation Interconnection Queue';
+$LOAD miso_gen
 
 PARAMETER population(regions) 'population (units: count)';
 $LOADDC population
@@ -218,14 +199,6 @@ LOOP(ipm, ABORT$(w_chk(ipm) <> 1.000) 'population weight factors are wrong for s
 
 
 *--------------------
-* Other model data
-*--------------------
-SCALAR lifetime 'plant lifetime (unit: years)' / 25 /;
-*--------------------
-
-
-
-*--------------------
 * Calculate number of fips regions per other region
 *--------------------
 parameter n_fips(regions);
@@ -234,15 +207,11 @@ n_fips(reeds_regions) = sum(fips$map_fips_reeds_regions(fips,reeds_regions), 1);
 *--------------------
 
 
-
 *--------------------
 * Diaggregate LDCs to FIPS level
 *--------------------
 ldc_raw(time(epoch,hrs),fips) = sum(ipm$map_fips_ipm(fips,ipm), wp(fips,ipm) * ldc_raw(epoch,hrs,ipm));
-
-ldc_raw_scaled(time(epoch,hrs),fips) = sum(ipm$map_fips_ipm(fips,ipm), wp(fips,ipm) * ldc_raw_scaled(epoch,hrs,ipm));
 *--------------------
-
 
 
 *--------------------
@@ -250,9 +219,9 @@ ldc_raw_scaled(time(epoch,hrs),fips) = sum(ipm$map_fips_ipm(fips,ipm), wp(fips,i
 *--------------------
 nrel_solar_cf(k,fips,hrs) = sum(reeds_balauth$map_fips_reeds_balauth(fips,reeds_balauth), nrel_solar_cf(k,reeds_balauth,hrs));
 
-nrel_solar_cost(nrel_solar_PV,fips,cost_bin) = sum(reeds_balauth$map_fips_reeds_balauth(fips,reeds_balauth), nrel_solar_cost(nrel_solar_PV,reeds_balauth,cost_bin));
+nrel_solar_cost(nrel_solar,fips) = sum(reeds_balauth$map_fips_reeds_balauth(fips,reeds_balauth), nrel_solar_cost(nrel_solar,reeds_balauth));
 
-nrel_solar_cap(nrel_solar_PV,fips,cost_bin) = sum(reeds_balauth$map_fips_reeds_balauth(fips,reeds_balauth), nrel_solar_cap(nrel_solar_PV,reeds_balauth,cost_bin) / n_fips(reeds_balauth));
+nrel_solar_cap(nrel_solar,fips) = sum(reeds_balauth$map_fips_reeds_balauth(fips,reeds_balauth), nrel_solar_cap(nrel_solar,reeds_balauth) / n_fips(reeds_balauth));
 *--------------------
 
 
@@ -262,9 +231,16 @@ nrel_solar_cap(nrel_solar_PV,fips,cost_bin) = sum(reeds_balauth$map_fips_reeds_b
 *--------------------
 nrel_wind_cf(k,fips,hrs) = sum(reeds_regions$map_fips_reeds_regions(fips,reeds_regions), nrel_wind_cf(k,reeds_regions,hrs));
 
-nrel_wind_cost(k,fips,cost_bin) = sum(reeds_regions$map_fips_reeds_regions(fips,reeds_regions), nrel_wind_cost(k,reeds_regions,cost_bin));
+nrel_wind_cost(k,fips) = sum(reeds_regions$map_fips_reeds_regions(fips,reeds_regions), nrel_wind_cost(k,reeds_regions));
 
-nrel_wind_cap(k,fips,cost_bin) = sum(reeds_regions$map_fips_reeds_regions(fips,reeds_regions), nrel_wind_cap(k,reeds_regions,cost_bin) / n_fips(reeds_regions));
+* onshore wind
+nrel_wind_cap(all_onwind,fips) = sum(reeds_regions$map_fips_reeds_regions(fips,reeds_regions), nrel_wind_cap(all_onwind,reeds_regions) / n_fips(reeds_regions));
+
+* offshore wind
+PARAMETER n_fips_offshore(regions);
+n_fips_offshore(reeds_regions) = sum(fips$(map_fips_reeds_regions(fips,reeds_regions) AND offshore_fips(fips)), 1);
+
+nrel_wind_cap(all_offwind,fips) = sum(reeds_regions$(map_fips_reeds_regions(fips,reeds_regions) AND offshore_fips(fips)), nrel_wind_cap(all_offwind,reeds_regions) / n_fips_offshore(reeds_regions));
 *--------------------
 
 

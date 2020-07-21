@@ -4,22 +4,39 @@ import folium
 import json
 import branca
 import os
-import filesys as fs
-import style_parameters as sp
 import gmsxfr
+import style_parameters as sp
+import argparse
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+    parser.add_argument("--data_dir", dest="data_dir", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+    # parser.set_defaults(data_dir="some path here")
+
+    args = parser.parse_args()
+
+    #
+    #
+    # create directory for results
+    if os.path.isdir(os.path.join(args.output, "generation")) == False:
+        os.mkdir(os.path.join(args.output, "generation"))
 
     #
     #
     # get model results
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "nodes.gdx"))
-    gdx.rgdx()
-
-    model_regions = gdx.to_dict("i")["elements"]
-
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(
+        ["y_ikr", "map_center", "frac_r", "all_solar", "all_wind", "nuclear", "hydro"]
+    )
 
     y_ikr = gdx.to_dataframe("y_ikr")
     map_center = gdx.to_dict("map_center")
@@ -34,7 +51,6 @@ if __name__ == "__main__":
     gen = y_ikr["elements"].copy()
     gen.loc[gen[gen["L"] <= np.finfo(float).tiny].index, "L"] = 0
 
-    gen["is_cntlreg"] = gen["i"].isin(gdx.to_dict("cntlreg")["elements"])
     gen["is_solar"] = gen["k"].isin(gdx.to_dict("all_solar")["elements"])
     gen["is_wind"] = gen["k"].isin(gdx.to_dict("all_wind")["elements"])
     gen["is_nuclear"] = gen["k"].isin(gdx.to_dict("nuclear")["elements"])
@@ -44,7 +60,7 @@ if __name__ == "__main__":
     gen["k"] = gen["k"].map(sp.gen_map)
 
     # groupby
-    gen_ikr = gen.groupby(["is_cntlreg", "k", "i", "r"]).sum()
+    gen_ikr = gen.groupby(["k", "i", "r"]).sum()
     gen_ikr.reset_index(drop=False, inplace=True)
     gen_ikr["L"] = gen_ikr["L"] / 1e3  # convert to GWh
 
@@ -65,7 +81,7 @@ if __name__ == "__main__":
     #
     #
     # map pct delta from baseline maps
-    with open(os.path.join(gdx.symText["results_folder"], "regions.json")) as f:
+    with open(os.path.join(args.data_repo, "regions.json")) as f:
         geodata = json.load(f)
 
     # map_center = [39.8333333, -98.585522]  # lat, lng for center of US
@@ -115,10 +131,9 @@ if __name__ == "__main__":
 
             my_map.save(
                 os.path.join(
-                    gdx.symText["results_folder"],
-                    "summary_maps",
+                    args.output,
                     "generation",
-                    f'{a1.replace("/","_").replace(" ","_")}_{a2}_pct_delta_gen_cntlreg.html',
+                    f"{a1.replace('/','_').replace(' ','_')}_{a2}_pct_delta_gen.html",
                 )
             )
 
@@ -162,9 +177,8 @@ if __name__ == "__main__":
 
             my_map.save(
                 os.path.join(
-                    gdx.symText["results_folder"],
-                    "summary_maps",
+                    args.output,
                     "generation",
-                    f'{a1.replace("/","_").replace(" ","_")}_{a2}_abs_gen_cntlreg.html',
+                    f"{a1.replace('/','_').replace(' ','_')}_{a2}_abs_gen.html",
                 )
             )

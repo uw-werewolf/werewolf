@@ -4,22 +4,47 @@ import folium
 import json
 import branca
 import os
-import filesys as fs
 import style_parameters as sp
 import gmsxfr
+import argparse
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+    parser.add_argument("--data_dir", dest="data_dir", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+    # parser.set_defaults(data_dir="some path here")
+
+    args = parser.parse_args()
+
+    #
+    #
+    # create directory for results
+    if os.path.isdir(os.path.join(args.output, "total_capacity")) == False:
+        os.mkdir(os.path.join(args.output, "total_capacity"))
 
     #
     #
     # get model results
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "nodes.gdx"))
-    gdx.rgdx()
-
-    model_regions = gdx.to_dict("i")["elements"]
-
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(
+        [
+            "capacity",
+            "map_center",
+            "frac_r",
+            "all_solar",
+            "all_wind",
+            "nuclear",
+            "hydro",
+        ]
+    )
 
     capacity = gdx.to_dataframe("capacity")
     map_center = gdx.to_dict("map_center")
@@ -63,10 +88,9 @@ if __name__ == "__main__":
     #
     #
     # map pct delta from baseline maps
-    with open(os.path.join(gdx.symText["results_folder"], "regions.json")) as f:
+    with open(os.path.join(args.data_repo, "regions.json")) as f:
         geodata = json.load(f)
 
-    # map_center = [39.8333333, -98.585522]  # lat, lng for center of US
     map_center = [map_center["elements"]["lat"], map_center["elements"]["lng"]]
 
     def style_function(feature):
@@ -113,10 +137,9 @@ if __name__ == "__main__":
 
             my_map.save(
                 os.path.join(
-                    gdx.symText["results_folder"],
-                    "summary_maps",
+                    args.output,
                     "total_capacity",
-                    f'{a1.replace("/","_").replace(" ","_")}_{a2}_pct_delta_tot_cap.html',
+                    f"{a1.replace('/','_').replace(' ','_')}_{a2}_pct_delta_tot_cap.html",
                 )
             )
 
@@ -160,9 +183,8 @@ if __name__ == "__main__":
 
             my_map.save(
                 os.path.join(
-                    gdx.symText["results_folder"],
-                    "summary_maps",
+                    args.output,
                     "total_capacity",
-                    f'{a1.replace("/","_").replace(" ","_")}_{a2}_abs_tot_cap.html',
+                    f"{a1.replace('/','_').replace(' ','_')}_{a2}_abs_tot_cap.html",
                 )
             )

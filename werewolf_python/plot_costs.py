@@ -6,18 +6,36 @@ import seaborn as sns
 import os
 import gmsxfr
 import style_parameters as sp
-import filesys as fs
+import argparse
 
 pd.plotting.register_matplotlib_converters()
 
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+
+    args = parser.parse_args()
+
     #
     #
     # get model results
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "solve_mode.gdx")
+    )
+    gdx.rgdx(["x_title"])
+    x_title = gdx.to_dict("x_title")["text"]
+
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(["TotalCost", "ExpCost_ir", "ExpCost_r", "frac_r", "cntlreg"])
 
     TotalCost = gdx.to_dict("TotalCost")
     ExpCost_r = gdx.to_dataframe("ExpCost_r")
@@ -40,18 +58,16 @@ if __name__ == "__main__":
     dollars = [
         i / 1e6 for i in TotalCost["elements"].values()
     ]  # convert to millions of dollars
-    ax.plot(np.array(list(carbon.values())) * 100, dollars, visible=True)
+    ax.plot(np.array(list(carbon.values())), dollars, visible=True)
 
     # plt.suptitle('super title here')
-    plt.xlabel(gdx.symText["x_title"])
+    plt.xlabel(x_title)
     plt.ylabel("Total Costs (M$)")
     plt.ylim(-y_div * (-min(dollars) // y_div + 1), y_div * (max(dollars) // y_div + 1))
     plt.tight_layout()
     ax.grid(which="major", axis="both", linestyle="--")
     plt.savefig(
-        os.path.join(gdx.symText["results_folder"], "summary_plots", "total_costs.png"),
-        dpi=600,
-        format="png",
+        os.path.join(args.output, "total_costs.png"), dpi=600, format="png",
     )
 
     #
@@ -61,7 +77,6 @@ if __name__ == "__main__":
     syscosts["L"] = syscosts["L"] / 1e6  # convert to millions of USD
     syscosts.loc[syscosts[syscosts["L"] <= np.finfo(float).tiny].index, "L"] = 0
     syscosts["r"] = syscosts["r"].map(carbon)
-    syscosts["r"] = syscosts["r"] * 100
 
     syscosts["ctype"] = syscosts["ctype"].map(sp.cost_map)
 
@@ -75,7 +90,7 @@ if __name__ == "__main__":
             ax.plot(df.r, df.L, visible=True, color=sp.cm_cost[i], label=i)
 
         # plt.suptitle('super title here')
-        plt.xlabel(gdx.symText["x_title"])
+        plt.xlabel(x_title)
         plt.ylabel("Cost (M$)")
         plt.ylim(
             -y_div * (-min(syscosts["L"]) // y_div + 1),
@@ -85,11 +100,7 @@ if __name__ == "__main__":
         plt.tight_layout()
         ax.grid(which="major", axis="both", linestyle="--")
     plt.savefig(
-        os.path.join(
-            gdx.symText["results_folder"], "summary_plots", "system_costs.png"
-        ),
-        dpi=600,
-        format="png",
+        os.path.join(args.output, "system_costs.png"), dpi=600, format="png",
     )
 
     #
@@ -129,7 +140,7 @@ if __name__ == "__main__":
                 )
 
             # plt.suptitle('super title here')
-            plt.xlabel(gdx.symText["x_title"])
+            plt.xlabel(x_title)
             plt.ylabel(f"{i} (M$)")
             plt.ylim(
                 -y_div * (-min(df["L"]) // y_div + 1),
@@ -139,11 +150,7 @@ if __name__ == "__main__":
             plt.tight_layout()
             ax.grid(which="major", axis="both", linestyle="--")
         plt.savefig(
-            os.path.join(
-                gdx.symText["results_folder"],
-                "summary_plots",
-                f"{i.lower()}_by_region.png",
-            ),
+            os.path.join(args.output, f"{i.lower()}_by_region.png",),
             dpi=600,
             format="png",
         )

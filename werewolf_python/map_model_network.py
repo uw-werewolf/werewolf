@@ -2,35 +2,50 @@ import pandas as pd
 import numpy as np
 import folium
 import json
-import filesys as fs
 import gmsxfr
 import os
+import argparse
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+    parser.add_argument("--data_dir", dest="data_dir", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+    # parser.set_defaults(data_dir="some path here")
+
+    args = parser.parse_args()
 
     #
     #
     # get network data
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "nodes.gdx"))
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "processed_werewolf_data.gdx")
+    )
+    gdx.rgdx(["lat", "lng", "map_aggr"])
 
     lat = gdx.to_dict("lat")
     lng = gdx.to_dict("lng")
     map_aggr = gdx.to_dataframe("map_aggr")
 
     gdx = gmsxfr.GdxContainer(
-        fs.gams_sysdir, os.path.join(fs.gdx_temp, "network_arcs.gdx")
+        args.gams_sysdir, os.path.join(args.data_repo, "network_arcs.gdx")
     )
-    gdx.rgdx()
+    gdx.rgdx("ij")
 
     ij = gdx.to_dict("ij")
 
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(["i", "map_center"])
 
     model_regions = gdx.to_dict("i")
     map_center = gdx.to_dict("map_center")
-    results_folder = gdx.symText["results_folder"]
 
     agg = gdx.to_dataframe("i")["elements"].copy().set_index("i")
     agg["lat"] = agg.index.map(lat["elements"])
@@ -41,10 +56,9 @@ if __name__ == "__main__":
     #
     #
     # map network with Delaunay triangulation
-    with open(os.path.join(results_folder, "regions.json")) as f:
+    with open(os.path.join(args.data_repo, "regions.json")) as f:
         geodata = json.load(f)
 
-    # map_center = [39.8333333, -98.585522]  # lat, lng for center of US
     map_center = [map_center["elements"]["lat"], map_center["elements"]["lng"]]
 
     my_map = folium.Map(location=map_center, zoom_start=6)
@@ -52,7 +66,7 @@ if __name__ == "__main__":
     borders = folium.FeatureGroup("Counties", show=False)
 
     folium.GeoJson(
-        os.path.join(fs.raw_data_dir, "county_borders.json"),
+        os.path.join(args.data_dir, "county_borders.json"),
         name="Counties",
         style_function=lambda x: {"weight": 0.25},
     ).add_to(borders)
@@ -60,7 +74,7 @@ if __name__ == "__main__":
 
     borders = folium.FeatureGroup("Tribal Lands", show=False)
     folium.GeoJson(
-        os.path.join(fs.raw_data_dir, "nrel-bia_tribal_lands.json"),
+        os.path.join(args.data_dir, "nrel-bia_tribal_lands.json"),
         name="Tribal Lands",
         style_function=lambda x: {"weight": 0.25},
     ).add_to(borders)
@@ -68,13 +82,13 @@ if __name__ == "__main__":
 
     borders = folium.FeatureGroup("NREL ReEDS Regions", show=False)
     folium.GeoJson(
-        os.path.join(fs.raw_data_dir, "nrel-lpreg3.json"),
+        os.path.join(args.data_dir, "nrel-lpreg3.json"),
         name="NREL ReEDS Regions",
         style_function=lambda x: {"weight": 0.25},
     ).add_to(borders)
     my_map.add_child(borders)
 
-    borders = folium.FeatureGroup("WEREWOLF Regions", show=False)
+    borders = folium.FeatureGroup("Werewolf Regions", show=False)
     folium.GeoJson(
         geodata, name="WEREWOLF Regions", style_function=lambda x: {"weight": 0.25}
     ).add_to(borders)
@@ -109,4 +123,4 @@ if __name__ == "__main__":
     my_map.add_child(arcs)
     my_map.add_child(nodes)
     folium.LayerControl().add_to(my_map)
-    my_map.save(os.path.join(results_folder, "transmission_network.html"))
+    my_map.save(os.path.join(args.output, "transmission_network.html"))

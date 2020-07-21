@@ -6,18 +6,36 @@ import seaborn as sns
 import gmsxfr
 import os
 import style_parameters as sp
-import filesys as fs
+import argparse
 
 pd.plotting.register_matplotlib_converters()
 
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+
+    args = parser.parse_args()
+
     #
     #
     # get model results
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "solve_mode.gdx")
+    )
+    gdx.rgdx(["x_title"])
+    x_title = gdx.to_dict("x_title")["text"]
+
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(["frac_r", "import_ibr", "import_ir", "export_ibr", "export_ir"])
 
     carbon = {
         i: gdx.to_dict("frac_r")["elements"][i]
@@ -34,12 +52,10 @@ if __name__ == "__main__":
     imports = import_ir["elements"].copy()
     imports.loc[imports[imports["L"] <= np.finfo(float).tiny].index, "L"] = 0
     imports["r"] = imports["r"].map(carbon)
-    imports["r"] = imports["r"] * 100  # convert to %
 
     exports = export_ir["elements"].copy()
     exports.loc[exports[exports["L"] <= np.finfo(float).tiny].index, "L"] = 0
     exports["r"] = exports["r"].map(carbon)
-    exports["r"] = exports["r"] * 100  # convert to %
 
     exim = imports.set_index(["i", "r"]).copy()
     exim.rename(columns={"L": "imports"}, inplace=True)
@@ -85,7 +101,7 @@ if __name__ == "__main__":
         )
 
         # plt.suptitle('super title here')
-        plt.xlabel(gdx.symText["x_title"])
+        plt.xlabel(x_title)
         plt.ylabel("Net Imports to Cntl Region (MW)")
         plt.tight_layout()
         plt.ylim(
@@ -96,7 +112,5 @@ if __name__ == "__main__":
         ax.legend(loc="upper right", frameon=True, prop={"size": 6})
 
     plt.savefig(
-        os.path.join(gdx.symText["results_folder"], "summary_plots", "agg_exim.png"),
-        dpi=600,
-        format="png",
+        os.path.join(args.output, "agg_exim.png"), dpi=600, format="png",
     )

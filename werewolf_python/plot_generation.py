@@ -5,19 +5,49 @@ import matplotlib.axis as axes
 import seaborn as sns
 import style_parameters as sp
 import os
-import filesys as fs
 import gmsxfr
+import argparse
 
 pd.plotting.register_matplotlib_converters()
 
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+
+    args = parser.parse_args()
+
     #
     #
     # get model results
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "solve_mode.gdx")
+    )
+    gdx.rgdx(["x_title"])
+    x_title = gdx.to_dict("x_title")["text"]
+
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(
+        [
+            "frac_r",
+            "y_ikr",
+            "cntlreg",
+            "fossil",
+            "all_solar",
+            "all_wind",
+            "nuclear",
+            "hydro",
+            "capacity",
+        ]
+    )
 
     carbon = {
         i: gdx.to_dict("frac_r")["elements"][i]
@@ -31,7 +61,6 @@ if __name__ == "__main__":
 
     gen["r"] = gen["r"].map(carbon)
     gen["L"] = gen["L"] / 1000  # convert to GWh
-    gen["r"] = gen["r"] * 100  # convert to %
 
     gen["is_cntlreg"] = gen["i"].isin(gdx.to_dict("cntlreg")["elements"])
     gen["is_fossil"] = gen["k"].isin(gdx.to_dict("fossil")["elements"])
@@ -69,7 +98,7 @@ if __name__ == "__main__":
         )
 
         # plt.suptitle('super title here')
-        plt.xlabel(gdx.symText["x_title"])
+        plt.xlabel(x_title)
         plt.ylabel("Total Actual Generation (GWh)")
         plt.tight_layout()
         plt.ylim(0, y_div * (max(gen_2["L"]) // y_div + 1))
@@ -77,11 +106,7 @@ if __name__ == "__main__":
         ax.legend(loc="upper right", frameon=True, prop={"size": 6})
 
     plt.savefig(
-        os.path.join(
-            gdx.symText["results_folder"], "summary_plots", "agg_generation.png"
-        ),
-        dpi=600,
-        format="png",
+        os.path.join(args.output, "agg_generation.png"), dpi=600, format="png",
     )
 
     #
@@ -119,18 +144,14 @@ if __name__ == "__main__":
         )
 
     # plt.suptitle('super title here')
-    plt.xlabel(gdx.symText["x_title"])
+    plt.xlabel(x_title)
     plt.ylabel("Total Actual Generation (GWh)")
     plt.tight_layout()
     plt.ylim(0, y_div * (max(gen_2[gen_2["is_cntlreg"] == True]["L"]) // y_div + 1))
     ax.grid(which="major", axis="both", linestyle="--")
     ax.legend(loc="upper right", frameon=True, prop={"size": 6})
     plt.savefig(
-        os.path.join(
-            gdx.symText["results_folder"], "summary_plots", "agg_generation_cntlreg.png"
-        ),
-        dpi=600,
-        format="png",
+        os.path.join(args.output, "agg_generation_cntlreg.png"), dpi=600, format="png",
     )
 
     #
@@ -143,7 +164,6 @@ if __name__ == "__main__":
     cap = gdx.to_dataframe("capacity")["elements"].copy()
     cap.loc[cap[cap["L"] <= np.finfo(float).tiny].index, "L"] = 0
     cap["r"] = cap["r"].map(carbon)
-    cap["r"] = cap["r"] * 100  # convert to %
 
     cap["is_cntlreg"] = cap["i"].isin(gdx.to_dict("cntlreg")["elements"])
     cap["is_fossil"] = cap["k"].isin(gdx.to_dict("fossil")["elements"])
@@ -194,18 +214,14 @@ if __name__ == "__main__":
             )
 
         # plt.suptitle('super title here')
-        plt.xlabel(gdx.symText["x_title"])
+        plt.xlabel(x_title)
         plt.ylabel("Capacity Factor (unitless)")
         plt.tight_layout()
         plt.ylim(0, 1.05)
         ax.grid(which="major", axis="both", linestyle="--")
         ax.legend(loc="upper right", frameon=True, prop={"size": 6})
         plt.savefig(
-            os.path.join(
-                gdx.symText["results_folder"],
-                "summary_plots",
-                f"capacity_factor_region_{region}.png",
-            ),
+            os.path.join(args.output, f"capacity_factor_region_{region}.png",),
             dpi=600,
             format="png",
         )

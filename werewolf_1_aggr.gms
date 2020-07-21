@@ -4,13 +4,40 @@ $IFTHENI %system.filesys% == UNIX $SET sep "/"
 $ELSE $SET sep "\"
 $ENDIF
 
+OPTION limrow = 0;
+OPTION limcol = 0;
+
 $ONEMPTY
 SCALAR myerrorlevel;
 
 $IF NOT SETGLOBAL ev_factor $SETGLOBAL ev_factor 0
+$IF NOT SETGLOBAL proj_year $SETGLOBAL proj_year 2030
+$IF NOT SETGLOBAL base_year $SETGLOBAL base_year 2020
 
-$IF NOT SET reldir $SETGLOBAL reldir '.'
-$IF NOT DEXIST '%reldir%%sep%gdx_temp' $CALL mkdir '%reldir%%sep%gdx_temp'
+$IF NOT SETGLOBAL output_gdx $SETGLOBAL output_gdx "processed_werewolf_data.gdx"
+
+
+* controls the growth of demand
+* EIA AEO 2020 says that demand will grow at approximately 0.8% year by year
+* https://www.eia.gov/outlooks/aeo/data/browser/#/?id=8-AEO2020&cases=ref2020&sourcekey=0
+$IF NOT SETGLOBAL demand_growth $SETGLOBAL demand_growth 0.8
+PARAMETER demand_growth / %demand_growth% /;
+
+SET yr "annual time horizon" / 2020*%proj_year% /;
+
+PARAMETER growth_factor;
+growth_factor = (1 + %demand_growth%/100)**(%proj_year% - %base_year%);
+
+PARAMETER ldc_raw_scaled(epoch,hrs,regions) 'scaled load duration curves';
+* scale demand to reflect future demand in year = %proj_year%
+ldc_raw_scaled(time(epoch,hrs),regions) = growth_factor * ldc_raw(epoch,hrs,regions);
+
+*--------------------
+* Other model data
+*--------------------
+SCALAR lifetime 'plant lifetime (unit: years)' / 25 /;
+*--------------------
+
 
 *--------------------
 * Set up regions to be in the model
@@ -40,6 +67,8 @@ total_population = sum(fips_p, population(fips_p));
 
 PARAMETER ev_load(epoch,hrs,regions);
 ev_load(time(epoch,hrs),fips) = (sin((pi/180)*((0.5*24)*hrs.val - 120)) + 1) * transport_energy/eer * population(fips) / total_population;
+*--------------------
+
 
 
 *--------------------
@@ -121,8 +150,7 @@ hr_ave(i,k)$(hr_dem(i,k) <> 0) = hr_num(i,k) / hr_dem(i,k);
 * aggregate generator types to each node in the model
 PARAMETER cap_agg(regions,k) 'aggregated existing nameplate capacity at nodes (units: MW)';
 
-cap_agg(i,k) = sum(fips$map_aggr(i,fips), sum(uid$(map_uid_fips(uid,fips) AND map_uid_type(uid,k)), cap(uid)));
-
+cap_agg(i,k) = sum(fips$map_aggr(i,fips), sum(uid$(map_uid_fips(uid,fips) AND map_uid_type(uid,k)), cap(uid))) + sum(fips$map_aggr(i,fips), sum(yr$(yr.val <= %proj_year%), miso_gen(fips,k,yr)));
 
 PARAMETER n_gen(regions,k) 'numer of generators of type k in model region i';
 n_gen(i,k) = sum(fips$map_aggr(i,fips), sum(uid$(map_uid_fips(uid,fips) AND map_uid_type(uid,k)), 1));
@@ -145,22 +173,18 @@ PARAMETER capcost_nrel(k,regions) 'capacity weighted capital costs (units: $/MW/
 nrel_solar_cf(k,i,hrs) = sum(fips$map_aggr(i,fips), nrel_solar_cf(k,fips,hrs)) / sum(fips_p$map_aggr(i,fips_p), 1);
 
 * calculate data for all model regions that are aggregations of fips regions
-nrel_solar_cap(nrel_solar_PV,i,cost_bin) = sum(fips$map_aggr(i,fips), nrel_solar_cap(nrel_solar_PV,fips,cost_bin));
+nrel_solar_cap(nrel_solar,i) = sum(fips$map_aggr(i,fips), nrel_solar_cap(nrel_solar,fips));
 
-* calculate aggregated capacity for all regions across all cost_bins
-cap_nrel(nrel_solar_PV,regions) = sum(cost_bin, nrel_solar_cap(nrel_solar_PV,regions,cost_bin));
-cap_nrel(nrel_solar_PV,i) = sum(fips$map_aggr(i,fips), sum(cost_bin, nrel_solar_cap(nrel_solar_PV,fips,cost_bin)));
-
-
-PARAMETER w_cb(k,regions,cost_bin) 'cost bin weight factor by capacity';
-w_cb(nrel_solar_PV,regions,cost_bin)$(cap_nrel(nrel_solar_PV,regions) <> 0) = nrel_solar_cap(nrel_solar_PV,regions,cost_bin) / cap_nrel(nrel_solar_PV,regions);
+* calculate aggregated capacity for all regions
+cap_nrel(nrel_solar,regions) = nrel_solar_cap(nrel_solar,regions);
+cap_nrel(nrel_solar,i) = sum(fips$map_aggr(i,fips), nrel_solar_cap(nrel_solar,fips));
 
 
 PARAMETER w_reg(k,regions,regions) 'regional weight factor by capacity';
-w_reg(nrel_solar_PV,map_aggr(i,fips))$(cap_nrel(nrel_solar_PV,i) <> 0) = cap_nrel(nrel_solar_PV,fips)
-/ cap_nrel(nrel_solar_PV,i);
+w_reg(nrel_solar,map_aggr(i,fips))$(cap_nrel(nrel_solar,i) <> 0) = cap_nrel(nrel_solar,fips)
+/ cap_nrel(nrel_solar,i);
 
-capcost_nrel(nrel_solar_PV,i) = sum(fips$map_aggr(i,fips), w_reg(nrel_solar_PV,i,fips) * sum(cost_bin, w_cb(nrel_solar_PV,fips,cost_bin) * nrel_solar_cost(nrel_solar_PV,fips,cost_bin)));
+capcost_nrel(nrel_solar,i) = sum(fips$map_aggr(i,fips), w_reg(nrel_solar,i,fips) * nrel_solar_cost(nrel_solar,fips));
 *--------------------
 
 
@@ -173,40 +197,31 @@ nrel_wind_cf(k,i,hrs) = sum(fips$map_aggr(i,fips), nrel_wind_cf(k,fips,hrs)) / s
 
 * Onshore Wind
 * calculate data for all model regions that are aggregations of fips regions
-nrel_wind_cap(nrel_onwind,i,cost_bin) = sum(fips$map_aggr(i,fips), nrel_wind_cap(nrel_onwind,fips,cost_bin));
+nrel_wind_cap(all_onwind,i) = sum(fips$map_aggr(i,fips), nrel_wind_cap(all_onwind,fips));
 
-* calculate aggregated capacity for all regions across all cost_bins
-cap_nrel(nrel_onwind,regions) = sum(cost_bin, nrel_wind_cap(nrel_onwind,regions,cost_bin));
-cap_nrel(nrel_onwind,i) = sum(fips$map_aggr(i,fips), sum(cost_bin, nrel_wind_cap(nrel_onwind,fips,cost_bin)));
+* calculate aggregated capacity for all regions
+cap_nrel(all_onwind,regions) = nrel_wind_cap(all_onwind,regions);
+cap_nrel(all_onwind,i) = sum(fips$map_aggr(i,fips), nrel_wind_cap(all_onwind,fips));
 
+w_reg(all_onwind,map_aggr(i,fips))$(cap_nrel(all_onwind,i) <> 0) = cap_nrel(all_onwind,fips)
+/ cap_nrel(all_onwind,i);
 
-w_cb(nrel_onwind,regions,cost_bin)$(cap_nrel(nrel_onwind,regions) <> 0) = nrel_wind_cap(nrel_onwind,regions,cost_bin) / cap_nrel(nrel_onwind,regions);
-
-w_reg(nrel_onwind,map_aggr(i,fips))$(cap_nrel(nrel_onwind,i) <> 0) = cap_nrel(nrel_onwind,fips)
-/ cap_nrel(nrel_onwind,i);
-
-
-capcost_nrel(nrel_onwind,i) = sum(fips$map_aggr(i,fips), w_reg(nrel_onwind,i,fips) * sum(cost_bin, w_cb(nrel_onwind,fips,cost_bin) * nrel_wind_cost(nrel_onwind,fips,cost_bin)));
-
-
+capcost_nrel(all_onwind,i) = sum(fips$map_aggr(i,fips), w_reg(all_onwind,i,fips) * nrel_wind_cost(all_onwind,fips));
 
 
 * Offshore Wind
 * calculate data for all model regions that are aggregations of fips regions
-nrel_wind_cap(nrel_offwind,i,cost_bin) = sum(fips$map_aggr(i,fips), nrel_wind_cap(nrel_offwind,fips,cost_bin));
+nrel_wind_cap(all_offwind,i) = sum(fips$map_aggr(i,fips), nrel_wind_cap(all_offwind,fips));
 
-* calculate aggregated capacity for all regions across all cost_bins
-cap_nrel(nrel_offwind,regions) = sum(cost_bin, nrel_wind_cap(nrel_offwind,regions,cost_bin));
-cap_nrel(nrel_offwind,i) = sum(fips$map_aggr(i,fips), sum(cost_bin, nrel_wind_cap(nrel_offwind,fips,cost_bin)));
+* calculate aggregated capacity for all regions
+cap_nrel(all_offwind,regions) = nrel_wind_cap(all_offwind,regions);
+cap_nrel(all_offwind,i) = sum(fips$map_aggr(i,fips), nrel_wind_cap(all_offwind,fips));
 
-
-w_cb(nrel_offwind,regions,cost_bin)$(cap_nrel(nrel_offwind,regions) <> 0) = nrel_wind_cap(nrel_offwind,regions,cost_bin) / cap_nrel(nrel_offwind,regions);
-
-w_reg(nrel_offwind,map_aggr(i,fips))$(cap_nrel(nrel_offwind,i) <> 0) = cap_nrel(nrel_offwind,fips)
-/ cap_nrel(nrel_offwind,i);
+w_reg(all_offwind,map_aggr(i,fips))$(cap_nrel(all_offwind,i) <> 0) = cap_nrel(all_offwind,fips)
+/ cap_nrel(all_offwind,i);
 
 
-capcost_nrel(nrel_offwind,i) = sum(fips$map_aggr(i,fips), w_reg(nrel_offwind,i,fips) * sum(cost_bin, w_cb(nrel_offwind,fips,cost_bin) * nrel_wind_cost(nrel_offwind,fips,cost_bin)));
+capcost_nrel(all_offwind,i) = sum(fips$map_aggr(i,fips), w_reg(all_offwind,i,fips) * nrel_wind_cost(all_offwind,fips));
 *--------------------
 
 
@@ -221,9 +236,9 @@ PARAMETER eC(k,regions) 'capital costs (units: $/MW/year)';
 * ref: https://www.eia.gov/analysis/studies/powerplants/capitalcost/pdf/capcost_assumption.pdf
 
 * input data has units of $/kW
-eC('Battery_fast',i) = 6 * 1484;
-eC('Battery_med',i) = 3 * 1484;
-eC('Battery_slow',i) = 1484;
+eC('Energy_Storage_fast',i) = 6 * 1484;
+eC('Energy_Storage_med',i) = 3 * 1484;
+eC('Energy_Storage_slow',i) = 1484;
 
 * NREL ATB 2019 (Dedicated biopower plant, not cofired)
 eC('Biomass',i) = 3990;
@@ -266,11 +281,11 @@ eC('Tires',i) = 4184;
 * NREL ATB 2019
 eC('Nuclear',i) = 6742;
 
-* NREL ATB 2019 (TRG 3 - Offshore Fixed)
-eC('Offshore_Wind',i) = 3835;
-
-* NREL ATB 2019
-eC('Onshore_Wind',i) = 1623;
+* * NREL ATB 2019 (TRG 3 - Offshore Fixed)
+* eC('Offshore_Wind',i) = 3835;
+*
+* * NREL ATB 2019
+* eC('Onshore_Wind',i) = 1623;
 
 * ??
 eC('Pumped_Storage',i) = 5626;
@@ -282,20 +297,20 @@ eC('Solar_PV',i) = 1100;
 eC('Solar_Thermal',i) = 6450;
 
 * these units are already in $/MW/year... do not need to convert in next step
-eC(nrel_solar_PV,i) = capcost_nrel(nrel_solar_PV,i);
-eC(nrel_onwind,i) = capcost_nrel(nrel_onwind,i);
-eC(nrel_offwind,i) = capcost_nrel(nrel_offwind,i);
+eC(nrel_solar,i) = capcost_nrel(nrel_solar,i);
+eC(all_onwind,i) = capcost_nrel(all_onwind,i);
+eC(all_offwind,i) = capcost_nrel(all_offwind,i);
 
 * convert to annualized capital costs (units: $/MW/year)
-eC(k,i)$(NOT nrel_solar_PV(k) AND NOT nrel_onwind(k) AND NOT nrel_offwind(k)) = eC(k,i) * 1000 / lifetime;
+eC(k,i)$(NOT nrel_solar(k) AND NOT all_onwind(k) AND NOT all_offwind(k)) = eC(k,i) * 1000 / lifetime;
 
 
 
 PARAMETER oC(k) 'fixed operating and maintenance costs (units: $/MW/yr)';
 * NREL ATB 2019 (Battery Storage - Mid - 2020)
-oC('Battery_fast') = 32100;
-oC('Battery_med') = 32100;
-oC('Battery_slow') = 32100;
+oC('Energy_Storage_fast') = 32100;
+oC('Energy_Storage_med') = 32100;
+oC('Energy_Storage_slow') = 32100;
 
 * NREL ATB 2019 (Dedicated)
 oC('Biomass') = 112000;
@@ -354,20 +369,20 @@ oC('Solar_PV') = 20000;
 oC('Solar_Thermal') = 66000;
 
 * NREL ATB 2019 (Utility PV)
-oC(nrel_solar_PV(k)) = 20000;
+oC(nrel_solar(k)) = 20000;
 
 * NREL ATB 2019
-oC(nrel_onwind(k)) = 44000;
+oC(all_onwind(k)) = 44000;
 
 * NREL ATB 2019 (TRG 3 - Offshore Fixed)
-oC(nrel_offwind(k)) = 134000;
+oC(all_offwind(k)) = 134000;
 
 
 PARAMETER gC(k) 'SRMC [fuel + variable O&M costs] (units: $/MWh/year)';
 * NREL ATB 2019 (Battery Storage - Mid - 2020)
-gC('Battery_fast') = 0;
-gC('Battery_med') = 0;
-gC('Battery_slow') = 0;
+gC('Energy_Storage_fast') = 0;
+gC('Energy_Storage_med') = 0;
+gC('Energy_Storage_slow') = 0;
 
 * NREL ATB 2019 (Dedicated)
 gC('Biomass') = 47;
@@ -426,13 +441,7 @@ gC('Solar_PV') = 0;
 gC('Solar_Thermal') = 3.5;
 
 * NREL ATB 2019 (Utility PV)
-gC(nrel_solar_PV(k)) = 0;
-
-* NREL ATB 2019
-gC(nrel_onwind(k)) = 0;
-
-* NREL ATB 2019 (TRG 3 - Offshore Fixed)
-gC(nrel_offwind(k)) = 0;
+gC(nrel_solar(k)) = 0;
 *--------------------
 
 
@@ -462,54 +471,4 @@ ldc_container(time(epoch,hrs),i,"total") = sum(fips$map_aggr(i,fips), ldc_raw_sc
 *--------------------
 
 
-
-* *--------------------
-* * OUTPUT: Generator Parameters
-* *--------------------
-* FILE cap_aggr /'.%sep%output%sep%capacity_aggr.csv'/;
-* PUT cap_aggr;
-* cap_aggr.PW = 32767;
-* PUT 'Region,GenType,Capacity (MW)' /;
-* loop((i,k), PUT i.tl:0 ',' k.tl:0 ',' cap_agg(i,k) /; );
-*
-*
-* FILE hr_average /'.%sep%output%sep%heat_rate_ave.csv'/;
-* PUT hr_average;
-* hr_average.PW = 32767;
-* PUT 'Region,GenType,Average Heat Rate (Btu/kWh)' /;
-* loop((i,k), PUT i.tl:0 ',' k.tl:0 ',' hr_ave(i,k) /; );
-* *--------------------
-
-
-
-*--------------------
-* OUTPUT: Node data
-*--------------------
-* this code creates a map of all the nodes for QA purposes
-EXECUTE_UNLOAD '.%sep%gdx_temp%sep%nodes.gdx' i, lat, lng, map_aggr;
-*--------------------
-
-
-
-*--------------------
-* Transmission network triangulation data (reads from nodes.gdx)
-*--------------------
-* create the network triangulation
-EXECUTE 'python create_network.py > %system.nullfile%';
-myerrorlevel = errorlevel;
-ABORT$(myerrorlevel <> 0) "ERROR: create_network.py did not finish successfully...";
-*--------------------
-
-
-
-*--------------------
-* OUTPUT: LDC plots
-*--------------------
-* this code creates all the load duration curves to be used in the model
-EXECUTE_UNLOAD '.%sep%gdx_temp%sep%ldc.gdx' ldc_container, regions, hrs, load_description;
-EXECUTE 'python create_ldcs.py > %system.nullfile%';
-myerrorlevel = errorlevel;
-ABORT$(myerrorlevel <> 0) "ERROR: create_ldcs.py did not finish successfully...";
-
-
-EXECUTE_UNLOAD '.%sep%gdx_temp%sep%processed_werewolf_data.gdx';
+EXECUTE_UNLOAD "%output_gdx%";

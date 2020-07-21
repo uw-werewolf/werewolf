@@ -5,21 +5,37 @@ import matplotlib.axis as axes
 import seaborn as sns
 import os
 import gmsxfr
-import filesys as fs
 import style_parameters as sp
+import argparse
 
 pd.plotting.register_matplotlib_converters()
 
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--output", dest="output", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+
+    args = parser.parse_args()
+
     #
     #
     # get model results
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, "final_results.gdx")
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "solve_mode.gdx")
+    )
+    gdx.rgdx(["x_title"])
+    x_title = gdx.to_dict("x_title")["text"]
 
-    # load data from GDX
-    gdx.rgdx()
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "final_results.gdx")
+    )
+    gdx.rgdx(["frac_r", "TotalCarbon_ir", "cntlreg"])
 
     carbon = {
         i: gdx.to_dict("frac_r")["elements"][i]
@@ -31,7 +47,6 @@ if __name__ == "__main__":
     emis = gdx.to_dataframe("TotalCarbon_ir")["elements"].copy()
     emis.loc[emis[emis["L"] <= np.finfo(float).tiny].index, "L"] = 0
     emis["r"] = emis["r"].map(carbon)
-    emis["r"] = emis["r"] * 100  # convert to %
 
     emis["is_cntlreg"] = emis["i"].isin(gdx.to_dict("cntlreg")["elements"])
 
@@ -65,7 +80,7 @@ if __name__ == "__main__":
         )
 
     # plt.suptitle('super title here')
-    plt.xlabel(gdx.symText["x_title"])
+    plt.xlabel(x_title)
     plt.ylabel("Total Carbon Emissions (Million Metric Tons CO2)")
     plt.ylim(0, y_div * (max(emis_2["L"]) // y_div + 1))
     plt.tight_layout()
@@ -73,9 +88,5 @@ if __name__ == "__main__":
     ax.legend(loc="upper right", frameon=True, prop={"size": 6})
 
     plt.savefig(
-        os.path.join(
-            gdx.symText["results_folder"], "summary_plots", "agg_emissions.png"
-        ),
-        dpi=600,
-        format="png",
+        os.path.join(args.output, "agg_emissions.png"), dpi=600, format="png",
     )

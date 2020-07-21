@@ -4,8 +4,6 @@ import pandas as pd
 import numpy as np
 import networkx as nx
 import time
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 from schema import Schema, And, Or, Use, Optional
 import sys
 from tqdm import tqdm
@@ -365,15 +363,15 @@ class GdxContainer:
         >>> gdxin.rgdx(sym=['i','x'])
         >>> gdxin.to_dict()
         {'i': {'type': 'set',
-          'dimenion': 1,
+          'dimension': 1,
           'domain': ['*'],
-          'numer_records': 2,
+          'number_records': 2,
           'text': 'canning plants',
           'elements': ['seattle', 'san-diego']},
          'x': {'type': 'var',
-          'dimenion': 2,
+          'dimension': 2,
           'domain': ['i', 'j'],
-          'numer_records': 6,
+          'number_records': 6,
           'text': 'shipment quantities in cases',
           'elements': {('seattle', 'new-york'): 50.0,
            ('seattle', 'chicago'): 300.0,
@@ -384,15 +382,15 @@ class GdxContainer:
 
         >>> gdxin.to_dict(uel_idx=True)
         {'i': {'type': 'set',
-          'dimenion': 1,
+          'dimension': 1,
           'domain': ['*'],
-          'numer_records': 2,
+          'number_records': 2,
           'text': 'canning plants',
           'elements': [1, 2]},
          'x': {'type': 'var',
-          'dimenion': 2,
+          'dimension': 2,
           'domain': ['i', 'j'],
-          'numer_records': 6,
+          'number_records': 6,
           'text': 'shipment quantities in cases',
           'elements': {(1, 3): 50.0,
            (1, 4): 300.0,
@@ -403,15 +401,15 @@ class GdxContainer:
 
         >>>gdxin.to_dict(uel_idx=False, fields=['L','M'])
         {'i': {'type': 'set',
-          'dimenion': 1,
+          'dimension': 1,
           'domain': ['*'],
-          'numer_records': 2,
+          'number_records': 2,
           'text': 'canning plants',
           'elements': ['seattle', 'san-diego']},
          'x': {'type': 'var',
-          'dimenion': 2,
+          'dimension': 2,
           'domain': ['i', 'j'],
-          'numer_records': 6,
+          'number_records': 6,
           'text': 'shipment quantities in cases',
           'elements': {('seattle', 'new-york'): {'L': 50.0, 'M': 0.0},
            ('seattle', 'chicago'): {'L': 300.0, 'M': 0.0},
@@ -450,11 +448,11 @@ class GdxContainer:
 
                 df[n] = {}
                 df[n]["type"] = self.symType[n]
-                df[n]["dimenion"] = self.symDim[n]
+                df[n]["dimension"] = self.symDim[n]
                 df[n]["domain"] = self.symDomain[n]
                 df[n]["domain_info"] = self.symDomainInfoType[n]
                 df[n]["alias_with"] = self.symAliasWith[n]
-                df[n]["numer_records"] = self.symNrRecs[n]
+                df[n]["number_records"] = self.symNrRecs[n]
                 df[n]["text"] = self.symText[n]
 
                 # get data
@@ -479,7 +477,9 @@ class GdxContainer:
                     if self.symDim[n] == 1:
                         df[n]["elements"] = list(elements["dim0"])
                     if self.symDim[n] > 1:
-                        df[n]["elements"] = list(elements.to_records(index=False))
+                        df[n]["elements"] = list(
+                            elements.itertuples(index=False, name=None)
+                        )
 
                 if self.symType[n] in {"parameter", "scalar"}:
                     if self.symDim[n] == 0:
@@ -625,11 +625,11 @@ class GdxContainer:
 
                 df[n] = {}
                 df[n]["type"] = self.symType[n]
-                df[n]["dimenion"] = self.symDim[n]
+                df[n]["dimension"] = self.symDim[n]
                 df[n]["domain"] = self.symDomain[n]
                 df[n]["domain_info"] = self.symDomainInfoType[n]
                 df[n]["alias_with"] = self.symAliasWith[n]
-                df[n]["numer_records"] = self.symNrRecs[n]
+                df[n]["number_records"] = self.symNrRecs[n]
                 df[n]["text"] = self.symText[n]
                 df[n]["elements"] = pd.DataFrame.from_records(self.symElements[n])
 
@@ -670,13 +670,20 @@ class GdxContainer:
             return df
 
     def __infer_dimension__(self, data, symbol_name):
-        if data[symbol_name]["type"] in {"set"}:
-            # Or(list, tuple, str, np.recarray)
+        if data[symbol_name]["type"] in {"set", "singleton_set"}:
+            # Or(set, list, str, int, np.int64, tuple, np.recarray)
             if isinstance(data[symbol_name]["elements"], (str, int, np.int64)):
                 return 1
 
             if isinstance(data[symbol_name]["elements"], tuple):
                 return len(data[symbol_name]["elements"])
+
+            if isinstance(data[symbol_name]["elements"], set):
+                first_elem = list(data[symbol_name]["elements"])[0]
+                if isinstance(first_elem, (str, int)):
+                    return 1
+                if isinstance(first_elem, tuple):
+                    return len(first_elem)
 
             if isinstance(data[symbol_name]["elements"], list):
                 if isinstance(data[symbol_name]["elements"][0], (str, int)):
@@ -691,22 +698,11 @@ class GdxContainer:
                 )
 
         elif data[symbol_name]["type"] in {"scalar"}:
-            # Or(int, float, np.recarray)
+            # Or(int, float, np.int64, np.float64, np.recarray)
             if isinstance(
                 data[symbol_name]["elements"], (int, np.int64, np.float64, float)
             ):
                 return 0
-
-            if isinstance(data[symbol_name]["elements"], np.recarray):
-                return len(
-                    set(data[symbol_name]["elements"].dtype.names)
-                    - self.__record_attr__
-                )
-
-        elif data[symbol_name]["type"] in {"singleton_set"}:
-            # Or(str, np.recarray)
-            if isinstance(data[symbol_name]["elements"], str):
-                return 1
 
             if isinstance(data[symbol_name]["elements"], np.recarray):
                 return len(
@@ -721,7 +717,7 @@ class GdxContainer:
             # Or(dict, np.recarray)
             if isinstance(data[symbol_name]["elements"], dict):
                 firstkey = list(data[symbol_name]["elements"].keys())[0]
-                if isinstance(firstkey, str):
+                if isinstance(firstkey, (str, int, np.int64)):
                     return 1
                 if isinstance(firstkey, tuple):
                     return len(firstkey)
@@ -766,12 +762,12 @@ class GdxContainer:
                 return len(data[symbol_name]["elements"])
 
         elif data[symbol_name]["type"] in {"singleton_set"}:
-            # Or(str, np.recarray)
-            if isinstance(data[symbol_name]["elements"], str):
-                return 1
-
-            if isinstance(data[symbol_name]["elements"], np.recarray):
-                return len(data[symbol_name]["elements"])
+            return 1
+            # if isinstance(data[symbol_name]["elements"], (str, tuple)):
+            #     return 1
+            #
+            # if isinstance(data[symbol_name]["elements"], np.recarray):
+            #     return len(data[symbol_name]["elements"])
 
         elif data[symbol_name]["type"] in {"alias"}:
             return -1
@@ -1065,18 +1061,6 @@ class GdxContainer:
                 elements[field] = elements[field].map(self.__strUels__)
                 elements[field] = elements[field].map(str)
 
-        # if self.symType[symbol_name] in {'paramter'}:
-        #     # map to gdx special values
-        #     for field in {'L'}:
-        #         idx = elements[elements[field].isin(
-        #             self.__gdxSpecialValuesWriteAs__.keys()) == True].index
-        #
-        #         if not idx.empty:
-        #             elements.loc[idx, field] = elements.loc[idx, field].map(
-        #                 self.__gdxSpecialValuesWriteAs__)
-        #         if elements[field].dtype != float:
-        #             elements[field] = elements[field].map(float)
-
         if self.symType[symbol_name] in {"parameter", "variable", "equation"}:
             # map to gdx special values
             for field in self.__record_attr__:
@@ -1107,6 +1091,14 @@ class GdxContainer:
 
             # standardize the data
             for i in data.keys():
+                # pre-convert for set and singleton_set
+                if data[i]["type"] in {"set", "singleton_set"}:
+                    if isinstance(data[i]["elements"], (int, np.int64)):
+                        data[i]["elements"] = str(data[i]["elements"])
+
+                    if isinstance(data[i]["elements"], set):
+                        data[i]["elements"] = list(data[i]["elements"])
+
                 self.__set_dimension__(data, i)
                 self.__set_nrecs__(data, i)
                 self.__set_domain__(data, i)
@@ -1126,6 +1118,15 @@ class GdxContainer:
         else:
 
             for i in data.keys():
+
+                # pre-convert for set and singleton_set
+                if data[i]["type"] in {"set", "singleton_set"}:
+                    if isinstance(data[i]["elements"], (int, np.int64)):
+                        data[i]["elements"] = [str(data[i]["elements"])]
+
+                    if isinstance(data[i]["elements"], set):
+                        data[i]["elements"] = list(data[i]["elements"])
+
                 self.__set_dimension__(data, i)
                 self.__set_nrecs__(data, i)
                 self.__set_domain__(data, i)
@@ -1248,7 +1249,7 @@ class GdxContainer:
         schema["set"] = Schema(
             {
                 "type": "set",
-                "elements": Or(list, str, int, np.int64, np.recarray),
+                "elements": Or(set, list, str, int, tuple, np.int64, np.recarray),
                 Optional("number_records"): int,
                 Optional("dimension"): int,
                 Optional("alias_with"): lambda n: n == None,
@@ -1261,7 +1262,9 @@ class GdxContainer:
         schema["singleton_set"] = Schema(
             {
                 "type": "singleton_set",
-                "elements": Or(str, np.recarray),
+                "elements": Or(
+                    Schema((str, int, np.int64)), set, str, int, np.int64, np.recarray,
+                ),
                 Optional("number_records"): int,
                 Optional("dimension"): int,
                 Optional("alias_with"): lambda n: n == None,
@@ -1355,10 +1358,9 @@ class GdxContainer:
             {
                 "type": "parameter",
                 "elements": Or(
-                    Schema({Schema(str): Or(int, float, np.int64, np.float64, str)}),
                     Schema(
                         {
-                            Schema((int, np.int64, str)): Or(
+                            Or(str, tuple, int, np.int64): Or(
                                 int, float, np.int64, np.float64, str
                             )
                         }
@@ -1378,8 +1380,9 @@ class GdxContainer:
             {
                 "type": "set",
                 "elements": Or(
-                    Schema([str, int, np.int64]),
-                    Schema((int, np.int64, str)),
+                    Schema([str, tuple, int, np.int64]),
+                    Schema((str, int, np.int64)),
+                    set,
                     str,
                     int,
                     np.recarray,
@@ -1396,7 +1399,9 @@ class GdxContainer:
         schema["singleton_set"] = Schema(
             {
                 "type": "singleton_set",
-                "elements": Or(str, np.recarray),
+                "elements": Or(
+                    Schema((str, int, np.int64)), set, str, int, np.int64, np.recarray,
+                ),
                 Optional("number_records"): int,
                 Optional("dimension"): int,
                 Optional("alias_with"): lambda n: n == None,
@@ -1709,7 +1714,7 @@ class GdxContainer:
             if i not in self.__symLoaded__:
                 self.__symLoaded__.append(i)
 
-    def __find_write_order__(self, output_graph=False, n_shells=2):
+    def __find_write_order__(self):
         # find a proper gdx write order
         # 1. Topologically sorted list of sets (build from a DAG)
         # 2. singleton sets
@@ -1731,42 +1736,6 @@ class GdxContainer:
         if not (not sorted_sets):
             sorted_sets.pop()
             gdx_write_order.extend(list(reversed(sorted_sets)))
-
-        # ******
-        # output graph of set_map
-        if output_graph == True:
-            nodes_per_shell = len(gdx_write_order) // n_shells
-            r = len(gdx_write_order) - nodes_per_shell * n_shells
-
-            shells = ["*"]
-            n = 0
-            for _ in range(n_shells - 1):
-                shells.append(gdx_write_order[n : n + nodes_per_shell])
-                n = n + nodes_per_shell
-            shells.append(gdx_write_order[n:])
-
-            pos = nx.layout.shell_layout(G, shells)
-            nodes = nx.draw_networkx_nodes(
-                G,
-                pos,
-                node_color="y",
-                node_shape="h",
-                node_size=100,
-                edgecolors="k",
-                linewidths=0.8,
-                alpha=0.75,
-            )
-            edges = nx.draw_networkx_edges(
-                G, pos, arrowstyle="->", arrowsize=6, width=0.8, alpha=0.8
-            )
-
-            labels = {k: f"{v}" for k, v in zip(list(G.nodes), list(G.nodes))}
-            nx.draw_networkx_labels(G, pos, labels, font_size=6, font_weight="normal")
-
-            ax = plt.gca()
-            ax.set_axis_off()
-            plt.savefig("domain_graph.png", dpi=600, format="png")
-        # ******
 
         [
             gdx_write_order.append(i)
@@ -1810,7 +1779,7 @@ class GdxContainer:
 
         return gdx_write_order
 
-    def write_gdx(self, gdxout, compress=False, domain_graph=False, n_shells=2):
+    def write_gdx(self, gdxout, compress=False):
         """
         The write_gdx() method is used export data contained in the GdxContainer to a GDX file for use directly in GAMS.
 
@@ -1833,11 +1802,6 @@ class GdxContainer:
         if not isinstance(compress, bool):
             raise Exception(
                 "compress must be of type bool, optional, default no compression"
-            )
-
-        if not isinstance(domain_graph, bool):
-            raise Exception(
-                "domain_graph must be of type bool, optional, default no graph output"
             )
 
         if os.path.isabs(gdxout) == False:
@@ -1877,9 +1841,7 @@ class GdxContainer:
             ]
 
         # find proper symbol write order to enable domain checking
-        gdx_write_order = self.__find_write_order__(
-            output_graph=domain_graph, n_shells=n_shells
-        )
+        gdx_write_order = self.__find_write_order__()
         print(f"gdx symbols will be written in the following order: {gdx_write_order}")
 
         #
@@ -1962,8 +1924,8 @@ class GdxContainer:
             assert gdxFree(gdxHandle)
             print("GDX not written successfully")
 
-            if os.path.exists(self.gdxfilename):
-                os.remove(self.gdxfilename)
+            if os.path.exists(gdxout):
+                os.remove(gdxout)
         else:
             gdxAutoConvert(gdxHandle, 1)
             assert not gdxClose(gdxHandle)

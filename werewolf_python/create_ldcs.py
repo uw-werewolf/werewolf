@@ -7,7 +7,7 @@ import argparse
 import glob
 import os
 import gmsxfr
-import filesys as fs
+import argparse
 
 pd.plotting.register_matplotlib_converters()
 
@@ -97,10 +97,23 @@ def fit_ldc(ldc, to_csv=False):
 
 if __name__ == "__main__":
 
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir, os.path.join(fs.gdx_temp, "ldc.gdx"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_repo", dest="data_repo", default=None, type=str)
+    parser.add_argument("--ldc_curves", dest="ldc_curves", default=None, type=str)
+
+    # parser.set_defaults(gams_sysdir="some path here")
+    # parser.set_defaults(data_repo="some path here")
+    # parser.set_defaults(ldc_curves="some path here")
+
+    args = parser.parse_args()
+
+    gdx = gmsxfr.GdxContainer(
+        args.gams_sysdir, os.path.join(args.data_repo, "processed_werewolf_data.gdx")
+    )
 
     # load data from GDX
-    gdx.rgdx()
+    gdx.rgdx(["ldc_container", "regions", "hrs"])
 
     ldc = gdx.to_dataframe("ldc_container")
     regions = gdx.to_dataframe("regions")
@@ -201,18 +214,12 @@ if __name__ == "__main__":
     }
 
     # write gdx file
-    gdx = gmsxfr.GdxContainer(fs.gams_sysdir)
+    gdx = gmsxfr.GdxContainer(args.gams_sysdir)
     gdx.validate(data)
     gdx.add_to_gdx(data, standardize_data=True, inplace=True, quality_checks=False)
-    gdx.write_gdx(os.path.join(fs.gdx_temp, "ldc_fit.gdx"))
+    gdx.write_gdx(os.path.join(args.data_repo, "ldc_fit.gdx"))
 
     # plot LDCs
-    # first remove all files in the directory
-    filelist = glob.glob(os.path.join(fs.ldc_curves_dir, "*"))
-    for f in filelist:
-        os.remove(f)
-
-    # now plot
     plt.style.use(["seaborn-white", "werewolf_style.mplstyle"])
 
     for i in set(ldc_fit["total"]["regions"]):
@@ -261,5 +268,5 @@ if __name__ == "__main__":
         plt.ylabel("Load (MW)")
         ax.legend(loc="best", frameon=True, prop={"size": 6})
         ax.set_xticklabels([])
-        plt.savefig(os.path.join(fs.ldc_curves_dir, f"{i}.png"), dpi=600, format="png")
+        plt.savefig(os.path.join(args.ldc_curves, f"{i}.png"), dpi=600, format="png")
         plt.close()
