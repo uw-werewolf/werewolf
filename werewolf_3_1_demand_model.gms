@@ -16,11 +16,22 @@ capredn = 0;
 nrenergyredn = 0;
 carbonleakage = 1;
 
-SET r "scenario iteration";
-PARAMETER frac_r(r);
-$GDXIN "%frac_gdx%"
-$LOAD r, frac_r
-$GDXIN
+SET r "scenario iteration" / 1*10 /;
+PARAMETER frac_r(r) /
+1 0,
+2 0.1,
+3 0.2,
+4 0.3,
+5 0.4,
+6 0.5,
+7 0.6,
+8 0.7,
+9 0.8,
+10 0.9 /;
+
+* $GDXIN "%frac_gdx%"
+* $LOAD r, frac_r
+* $GDXIN
 frac_r(r) = eps + frac_r(r);
 
 

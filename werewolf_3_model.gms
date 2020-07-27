@@ -13,11 +13,8 @@ $IF NOT SETGLOBAL co2redn $SETGLOBAL co2redn 0
 $IF NOT SETGLOBAL capredn $SETGLOBAL capredn 0
 $IF NOT SETGLOBAL nrenergyredn $SETGLOBAL nrenergyredn 0
 $IF NOT SETGLOBAL carbonleakage $SETGLOBAL carbonleakage 1
-$IF NOT SETGLOBAL policy_model $SETGLOBAL policy_model 0
+$IF NOT SETGLOBAL policy_model $SETGLOBAL policy_model 1
 $IF NOT SETGLOBAL demand_model $SETGLOBAL demand_model 0
-
-ABORT$(%policy_model% = 1 AND %demand_model% = 1) "must choose either demand model or policy model";
-ABORT$(%policy_model% = 0 AND %demand_model% = 0) "must choose either demand model or policy model";
 
 $IF NOT SETGLOBAL processed_data $SETGLOBAL processed_data "processed_werewolf_data.gdx"
 $IF NOT SETGLOBAL final_results $SETGLOBAL final_results "final_results.gdx"
