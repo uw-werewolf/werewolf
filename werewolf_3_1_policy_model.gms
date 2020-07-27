@@ -21,16 +21,21 @@ z.LO(a,i,k)$aik(a,i,k) = capU(a,i,k);
 
 PARAMETER mode;
 
-$GDXIN "%solve_mode%"
-$LOAD mode
-$GDXIN
+* $GDXIN "%solve_mode%"
+* $LOAD mode
+* $GDXIN
 
 * SOLVE Year 2020 Model
 frac = 0;
-co2redn = mode("2020_baseline","co2redn");
-capredn = mode("2020_baseline","capredn");
-nrenergyredn = mode("2020_baseline","nrenergyredn");
-carbonleakage = mode("2020_baseline","carbonleakage");
+co2redn = 0;
+capredn = 0;
+nrenergyredn = 0;
+carbonleakage = 1;
+
+* co2redn = mode("2020_baseline","co2redn");
+* capredn = mode("2020_baseline","capredn");
+* nrenergyredn = mode("2020_baseline","nrenergyredn");
+* carbonleakage = mode("2020_baseline","carbonleakage");
 
 SOLVE capsysopt USING lp min sysobj;
 
@@ -81,10 +86,15 @@ z.LO(a,i,k)$aik(a,i,k) = 0;
 * SOLVE baseline scenario model
 frac = 0;
 * must hold baseline policy to that generated in 2020
-co2redn = mode("proj_year_baseline","co2redn");
-capredn = mode("proj_year_baseline","capredn");
-nrenergyredn = mode("proj_year_baseline","nrenergyredn");
-carbonleakage = mode("proj_year_baseline","carbonleakage");
+co2redn = 1;
+capredn = 0;
+nrenergyredn = 0;
+carbonleakage = 1;
+
+* co2redn = mode("proj_year_baseline","co2redn");
+* capredn = mode("proj_year_baseline","capredn");
+* nrenergyredn = mode("proj_year_baseline","nrenergyredn");
+* carbonleakage = mode("proj_year_baseline","carbonleakage");
 
 SOLVE capsysopt USING lp min sysobj;
 
@@ -155,10 +165,15 @@ PARAMETER q_out(t,wn,sn,hn,i,b,r);
 
 LOOP(r,
 frac = frac_r(r);
-co2redn = mode("proj_year_scn","co2redn");
-capredn = mode("proj_year_scn","capredn");
-nrenergyredn = mode("proj_year_scn","nrenergyredn");
-carbonleakage = mode("proj_year_scn","carbonleakage");
+co2redn = 1;
+capredn = 0;
+nrenergyredn = 0;
+carbonleakage = 0;
+
+* co2redn = mode("proj_year_scn","co2redn");
+* capredn = mode("proj_year_scn","capredn");
+* nrenergyredn = mode("proj_year_scn","nrenergyredn");
+* carbonleakage = mode("proj_year_scn","carbonleakage");
 
 SOLVE capsysopt USING lp min sysobj;
 

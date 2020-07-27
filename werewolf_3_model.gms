@@ -22,7 +22,8 @@ ABORT$(%policy_model% = 0 AND %demand_model% = 0) "must choose either demand mod
 $IF NOT SETGLOBAL processed_data $SETGLOBAL processed_data "processed_werewolf_data.gdx"
 $IF NOT SETGLOBAL final_results $SETGLOBAL final_results "final_results.gdx"
 $IF NOT SETGLOBAL frac_gdx $SETGLOBAL frac_gdx "frac_gdx.gdx"
-$IF NOT SETGLOBAL solve_model $SETGLOBAL solve_model "solve_mode.gdx"
+* $IF NOT SETGLOBAL solve_model $SETGLOBAL solve_model "solve_mode.gdx"
+
 
 SCALAR frac / %frac% /;
 SCALAR co2redn / %co2redn% /;

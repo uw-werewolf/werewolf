@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from werewolf_python import *
 import pprint
+import argparse
 
 
 class _werewolf_1_0:
@@ -292,7 +293,22 @@ class WerewolfData:
 
 if __name__ == "__main__":
 
-    wdl = WerewolfData(data_dir=os.path.join(os.getcwd(), "data"), version="wi_psc")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gams_sysdir", dest="gams_sysdir", default=None, type=str)
+    parser.add_argument("--data_dir", dest="data_dir", default=None, type=str)
+    parser.add_argument("--version", dest="version", default=None, type=str)
+
+    parser.set_defaults(
+        gams_sysdir=os.path.join(
+            os.sep, "Applications", "GAMS30.3", "Resources", "sysdir"
+        )
+    )
+    parser.set_defaults(data_dir=os.path.join(os.getcwd(), "data"))
+    parser.set_defaults(version="wi_psc")
+
+    args = parser.parse_args()
+
+    wdl = WerewolfData(data_dir=args.data_dir, version=args.version)
 
     # aggregate NREL solar and wind data into regional, only, data
     # must aggreate across technology and cost bins
@@ -1444,8 +1460,8 @@ if __name__ == "__main__":
     #
     #
     # GDX creation
-    gdx = gmsxfr.GdxContainer("/Applications/GAMS30.3/Resources/sysdir")
+    gdx = gmsxfr.GdxContainer(args.gams_sysdir)
     gdx.validate(data)
 
     gdx.add_to_gdx(data, standardize_data=True, inplace=True, quality_checks=False)
-    gdx.write_gdx("werewolf_data_test.gdx", compress=True)
+    gdx.write_gdx("werewolf_data.gdx", compress=True)

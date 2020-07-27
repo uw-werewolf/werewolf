@@ -1,6 +1,8 @@
 *.lst
-*.gdx
+processed_werewolf_data.gdx
+werewolf_data.gdx
 *.g0*
 output/
 __pycache__/
 data/
+standard_data/

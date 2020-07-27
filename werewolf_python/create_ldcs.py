@@ -219,54 +219,54 @@ if __name__ == "__main__":
     gdx.add_to_gdx(data, standardize_data=True, inplace=True, quality_checks=False)
     gdx.write_gdx(os.path.join(args.data_repo, "ldc_fit.gdx"))
 
-    # plot LDCs
-    plt.style.use(["seaborn-white", "werewolf_style.mplstyle"])
-
-    for i in set(ldc_fit["total"]["regions"]):
-        fig, ax = plt.subplots()
-        df = pd.DataFrame()
-        df["total"] = ldc_fit["total"][
-            ldc_fit["total"]["regions"] == i
-        ].L.values.tolist()
-
-        df["2020"] = ldc_fit["2020"][ldc_fit["2020"]["regions"] == i].L.values.tolist()
-
-        df["new_baseload"] = ldc_fit["new_baseload"][
-            ldc_fit["new_baseload"]["regions"] == i
-        ].L.values.tolist()
-
-        df["fit"] = ldc_fit["total"][
-            ldc_fit["total"]["regions"] == i
-        ].fit.values.tolist()
-
-        total = df.total.values.tolist()
-        total.sort(reverse=True)
-        ax.plot(total, linewidth=1, color="red", label="EVs + New Baseload")
-
-        baseload_2020 = df["2020"].values.tolist()
-        baseload_2020.sort(reverse=True)
-        ax.plot(baseload_2020, linewidth=1, color="green", label="Orig Baseload")
-
-        new_baseload = df.new_baseload.values.tolist()
-        new_baseload.sort(reverse=True)
-        ax.plot(new_baseload, linewidth=1, color="blue", label="New Baseload")
-
-        fit = df.fit.values.tolist()
-        fit.sort(reverse=True)
-        ax.plot(fit, linewidth=1, color="grey", label="fit")
-
-        plt.suptitle("Load Demand Curve")
-        plt.title(f"Node = {i}")
-
-        plt.ylim(bottom=0)
-        plt.xlim(left=0, right=8760)
-        ax = plt.gca()
-        ax.grid(which="major", axis="y", linestyle="--")
-        ax.grid(which="major", axis="x", linestyle="--")
-
-        # plt.xlabel('Hour')
-        plt.ylabel("Load (MW)")
-        ax.legend(loc="best", frameon=True, prop={"size": 6})
-        ax.set_xticklabels([])
-        plt.savefig(os.path.join(args.ldc_curves, f"{i}.png"), dpi=600, format="png")
-        plt.close()
+    # # plot LDCs
+    # plt.style.use(["seaborn-white", "werewolf_style.mplstyle"])
+    #
+    # for i in set(ldc_fit["total"]["regions"]):
+    #     fig, ax = plt.subplots()
+    #     df = pd.DataFrame()
+    #     df["total"] = ldc_fit["total"][
+    #         ldc_fit["total"]["regions"] == i
+    #     ].L.values.tolist()
+    #
+    #     df["2020"] = ldc_fit["2020"][ldc_fit["2020"]["regions"] == i].L.values.tolist()
+    #
+    #     df["new_baseload"] = ldc_fit["new_baseload"][
+    #         ldc_fit["new_baseload"]["regions"] == i
+    #     ].L.values.tolist()
+    #
+    #     df["fit"] = ldc_fit["total"][
+    #         ldc_fit["total"]["regions"] == i
+    #     ].fit.values.tolist()
+    #
+    #     total = df.total.values.tolist()
+    #     total.sort(reverse=True)
+    #     ax.plot(total, linewidth=1, color="red", label="EVs + New Baseload")
+    #
+    #     baseload_2020 = df["2020"].values.tolist()
+    #     baseload_2020.sort(reverse=True)
+    #     ax.plot(baseload_2020, linewidth=1, color="green", label="Orig Baseload")
+    #
+    #     new_baseload = df.new_baseload.values.tolist()
+    #     new_baseload.sort(reverse=True)
+    #     ax.plot(new_baseload, linewidth=1, color="blue", label="New Baseload")
+    #
+    #     fit = df.fit.values.tolist()
+    #     fit.sort(reverse=True)
+    #     ax.plot(fit, linewidth=1, color="grey", label="fit")
+    #
+    #     plt.suptitle("Load Demand Curve")
+    #     plt.title(f"Node = {i}")
+    #
+    #     plt.ylim(bottom=0)
+    #     plt.xlim(left=0, right=8760)
+    #     ax = plt.gca()
+    #     ax.grid(which="major", axis="y", linestyle="--")
+    #     ax.grid(which="major", axis="x", linestyle="--")
+    #
+    #     # plt.xlabel('Hour')
+    #     plt.ylabel("Load (MW)")
+    #     ax.legend(loc="best", frameon=True, prop={"size": 6})
+    #     ax.set_xticklabels([])
+    #     plt.savefig(os.path.join(args.ldc_curves, f"{i}.png"), dpi=600, format="png")
+    #     plt.close()
